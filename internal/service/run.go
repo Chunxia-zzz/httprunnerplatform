@@ -107,9 +107,17 @@ func (s *RunService) Start(req StartRunRequest, triggerBy uint64) (*model.RunRec
 	if req.TargetType == "" {
 		req.TargetType = model.TargetCase
 	}
-	if req.TargetType != model.TargetCase {
+	// ⭐ 分派而不是各开一个端点：前端、定时任务、CI 用的是同一条
+	// POST /runs，只是 target_type 不同。入口一多，参数校验与权限
+	// 就容易各自漂移出一套。
+	switch req.TargetType {
+	case model.TargetCase:
+		// 继续往下走单用例路径。
+	case model.TargetSuite:
+		return s.StartSuite(req, triggerBy)
+	default:
 		return nil, errBadParam(
-			"M1 只支持 target_type=case（suite / plan 在 M2 提供），收到 %q", req.TargetType)
+			"target_type 只支持 case / suite（plan 在 M2 后续提供），收到 %q", req.TargetType)
 	}
 	if req.ProjectID == 0 || req.TargetID == 0 {
 		return nil, errBadParam("project_id 与 target_id 不能为空")
@@ -185,9 +193,12 @@ func (s *RunService) Start(req StartRunRequest, triggerBy uint64) (*model.RunRec
 // resolveTimeout 逐级回退解析单用例超时。
 //
 // 优先级：本次请求选项 → 用例自身设置 → 平台配置默认值 → 执行器默认。
+//
+// ⚠️ tc 可以为 nil：用例集执行时没有"单个用例"这一层，
+// 超时只能回退到平台默认值。这里必须判空，否则会 panic。
 func (s *RunService) resolveTimeout(reqSec int, tc *model.TestCase) time.Duration {
 	sec := reqSec
-	if sec <= 0 {
+	if sec <= 0 && tc != nil {
 		sec = tc.CaseTimeout
 	}
 	if sec <= 0 {
@@ -443,56 +454,10 @@ func (s *RunService) persist(job *runJob, cc compiler.CompiledCase, res *parser.
 			return err
 		}
 
-		steps := make([]model.StepResult, 0, len(res.Steps))
-		for i := range res.Steps {
-			st := res.Steps[i]
-			steps = append(steps, model.StepResult{
-				RunID:            job.runID,
-				CaseResultID:     caseRes.ID,
-				CaseCode:         job.tc.Code,
-				Seq:              st.Seq,
-				StepName:         clip(st.Name, 128),
-				StepType:         st.StepType,
-				Status:           st.Status,
-				InferredFailed:   st.InferredFailed,
-				FinalURL:         clip(st.FinalURL, 1024),
-				RequestSnapshot:  anyOf(st.Request),
-				ResponseSnapshot: anyOf(st.Response),
-				ElapsedMs:        st.ElapsedMs,
-				ExtractResult:    st.ExtractResult,
-				ErrorMsg:         clip(st.ErrorMsg, 1024),
-			})
-		}
-		if len(steps) > 0 {
-			if err := tx.Create(&steps).Error; err != nil {
-				return err
-			}
-		}
-
-		var asserts []model.AssertionResult
-		for i := range res.Steps {
-			for _, a := range res.Steps[i].Assertions {
-				asserts = append(asserts, model.AssertionResult{
-					RunID:           job.runID,
-					CaseResultID:    caseRes.ID,
-					StepResultID:    steps[i].ID,
-					Seq:             a.Seq,
-					CheckExpr:       clip(a.CheckExpr, 512),
-					AssertMethod:    clip(a.AssertMethod, 32),
-					ExpectValue:     clip(a.ExpectValue, 1024),
-					ExpectValueType: clip(a.ExpectValueType, 32),
-					CheckValue:      clip(a.CheckValue, 1024),
-					CheckValueType:  clip(a.CheckValueType, 32),
-					Passed:          a.Passed,
-					Rebuilt:         a.Rebuilt,
-					Msg:             clip(a.Msg, 512),
-				})
-			}
-		}
-		if len(asserts) > 0 {
-			if err := tx.Create(&asserts).Error; err != nil {
-				return err
-			}
+		// 步骤与断言两层与用例集执行**共用**同一段写库逻辑（insertCaseLayers）：
+		// 两处若各写一份，迟早会漂移出"单跑看得到步骤、放进用例集就看不到"的差异。
+		if err := insertCaseLayers(tx, job.runID, caseRes.ID, job.tc.Code, res.Steps); err != nil {
+			return err
 		}
 
 		finished := time.Now()

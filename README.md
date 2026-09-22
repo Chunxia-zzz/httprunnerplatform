@@ -75,8 +75,15 @@
   - 测试：`internal/auth` 7 项 + `internal/service` 30 余项 + `internal/api` 9 项；浏览器端到端 [`scripts/ui/auth-smoke.mjs`](scripts/ui/auth-smoke.mjs) **44 项全绿**（脚本已入库）
 - 🔄 **③ 编排层（用例集 / 测试计划 / CI Token）** 进行中：
   - 设计已定稿：[docs/用例集与测试计划设计.md](docs/用例集与测试计划设计.md)
-  - 已完成：用例集的模型、服务、API 与 15 项单测（成员唯一、跨项目拒绝、已删除成员可见化）
-  - 待完成：用例集**执行**（1 条 RunRecord + N 条 CaseResult）、测试计划与 cron 调度、CI Token 与 `/open` 触发、前端页面
+  - ✅ 已完成：用例集的模型、服务、API 与单测（成员唯一、跨项目拒绝、成员「能不能跑」可见化）
+  - ✅ 已完成：用例集**执行**（1 条 RunRecord + N 条 CaseResult）
+    - 串行执行，成员顺序即执行顺序；`on_failure` 支持 `continue`（默认）/ `abort`
+    - 用例数对账：`expected` / `actual` / `count_mismatch`，不一致强制升为 error（防 F5 假绿）
+    - ⭐ `abort` 与取消时 `expected` 收缩到实际尝试条数 —— 主动中止不该被记成对账不一致
+    - 已禁用成员记 `skipped`；已删除成员记 `error`（该分支页面走不到，见下）
+    - ⭐ 实测发现：**被引用的用例不允许删除**（40003），所以「已删除成员」是防御性分支，覆盖放在单测里
+    - 单测 20 项 + 端到端冒烟 [`scripts/smoke-suite.mjs`](scripts/smoke-suite.mjs) **54 项全绿**
+  - 待完成：测试计划与 cron 调度、CI Token 与 `/open` 触发、前端页面
 
 ## 快速开始（单文件交付）
 
