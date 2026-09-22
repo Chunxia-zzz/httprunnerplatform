@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +12,7 @@ import (
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/auth"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/config"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/service"
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/webui"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/hrpclient"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/response"
 )
@@ -27,6 +30,9 @@ type Deps struct {
 	// 由调用方（cmd/server）构造而不是在这里 new：运行服务需要持有
 	// 在跑执行的取消句柄，进程退出时要由同一个实例负责优雅收尾。
 	Services *service.Set
+	// WebUI 是内嵌的前端资源。为 nil 时不做静态托管
+	// （单测里通常不需要，也就不必构造）。
+	WebUI *webui.UI
 }
 
 // NewRouter 组装 gin 路由。
@@ -46,9 +52,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		r.Use(middleware.CORS(origins))
 	}
 
-	r.NoRoute(func(c *gin.Context) {
-		Fail(c, response.CodeNotFound, "接口不存在")
-	})
+	r.NoRoute(noRouteHandler(deps))
 
 	v1 := r.Group("/api/v1")
 
@@ -124,6 +128,40 @@ func registerRunRoutes(g *gin.RouterGroup, deps *Deps) {
 	g.POST("/runs/:id/cancel", h.Cancel)
 	g.GET("/runs/:id/report", h.Report)
 	g.GET("/runs/:id/logs", h.Logs)
+}
+
+// noRouteHandler 处理所有没有匹配到路由的请求。
+//
+// 职责边界必须分清（顺序即优先级）：
+//
+//	/api/...  → 一律 JSON 兜底错误，**绝不进 SPA fallback**
+//	非 GET    → 同样是 JSON 错误（内嵌资源只有 GET/HEAD 有意义）
+//	其余 GET  → 内嵌前端：存在的静态文件直接给；带扩展名但不存在给 404；
+//	           其余当作前端路由，回 index.html
+//
+// 第一条是本文件里最要紧的一处判断：接口路径打错时若返回 HTML，
+// 前端拿到的是「Unexpected token '<'」，与真实原因（路径写错）毫无关系。
+func noRouteHandler(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		p := c.Request.URL.Path
+
+		if p == "/api" || strings.HasPrefix(p, "/api/") {
+			Fail(c, response.CodeNotFound, "接口不存在")
+			return
+		}
+
+		if deps.WebUI == nil {
+			Fail(c, response.CodeNotFound, "资源不存在")
+			return
+		}
+
+		if m := c.Request.Method; m != http.MethodGet && m != http.MethodHead {
+			Fail(c, response.CodeNotFound, "资源不存在")
+			return
+		}
+
+		deps.WebUI.Handler()(c)
+	}
 }
 
 // ginMode 把配置里的 mode 映射到 gin 常量。

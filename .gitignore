@@ -53,6 +53,11 @@ go.work.sum
 /web/.vite/
 *.tsbuildinfo
 
+# go:embed 的内嵌目录：内容由 scripts/build.sh 从 web/dist 同步而来。
+# 只保留 .gitkeep，让全新克隆不装 Node 也能 go build / go test。
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep
+
 # 实测/调试产物
 /stderr.log
 /stdout.log

@@ -27,6 +27,7 @@ import (
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/repo"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/service"
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/webui"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/hrpclient"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/logx"
 )
@@ -250,6 +251,15 @@ func newServerCmd(g *globalFlags) *cobra.Command {
 
 			sessions := auth.NewStore(cfg.Auth.TokenTTL())
 
+			// 内嵌前端。加载失败不阻断启动：后端 API 仍可用，
+			// 前端可以退回开发服务器（npm run dev）。
+			ui, err := webui.Load()
+			if err != nil {
+				logx.L().Warn().Err(err).Msg("内嵌前端不可用，将只提供 API")
+			} else {
+				logx.L().Info().Str("ui", ui.Describe()).Msg("前端资源就绪")
+			}
+
 			// services 由这里持有而不是交给 NewRouter 内部构造：
 			// 运行服务维护着在跑执行的取消句柄，进程退出时必须由**同一个实例**
 			// 负责把 hrp 子进程收干净（实测 A6：被强杀的 hrp 会留下挂起的子进程）。
@@ -259,6 +269,7 @@ func newServerCmd(g *globalFlags) *cobra.Command {
 				DB:       db,
 				Sessions: sessions,
 				Services: svcs,
+				WebUI:    ui,
 			})
 
 			srv := &http.Server{

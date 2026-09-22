@@ -64,11 +64,38 @@
 - ✅ **M1 后端**：编译器 / 执行器 / 结果解析 / 静态校验 / 服务编排 / REST API 全部完成，`go vet` 与全量单测通过
 - ✅ **端到端冒烟**：`bash ../httprunnerplatform-e2e/e2e.sh`（22 项断言全绿，覆盖建项目 → 建环境 → 建用例 → 校验 → YAML 预览 → 执行 → 步骤/断言明细 → 报告 → 日志 → 错误码）
 - ✅ **M1 前端**：`web/` 下的 Vue 3 页面全部完成（登录 / 项目 / 环境 / 用例列表 / 用例编辑器 / 执行记录 / 执行详情），`vue-tsc` 与 `vite build` 均无错误
-- ✅ **M1 验收**：四条验收标准已由真实浏览器跑通（`node ../httprunnerplatform-ui/ui-smoke.mjs`，60 项断言全绿）
+- ✅ **M1 验收**：四条验收标准已由真实浏览器跑通（`node ../httprunnerplatform-ui/ui-smoke.mjs`，63 项断言全绿）
+- ✅ **单文件交付**：`bash scripts/build.sh` 产出内嵌前端的单个可执行文件（42 MB，内嵌 28 个前端文件）；关掉 Vite 只跑这一个 exe，同一套 63 项断言仍然全绿
+
+## 快速开始（单文件交付）
+
+```bash
+bash scripts/build.sh          # 前端 → go:embed → 一个可执行文件
+./httprunnerplatform.exe server
+```
+
+浏览器打开 <http://127.0.0.1:8080> 即可（默认账号 `admin` / `admin123`，**请尽快修改**）。
+前端已内嵌，**不需要 Node**，也不需要另起进程 —— 这是推荐的交付方式。
+
+```bash
+bash scripts/build.sh /tmp/xxx     # 指定输出路径
+SKIP_NPM=1 bash scripts/build.sh   # 复用已有 web/dist，只重新内嵌与编译
+```
+
+> **为什么构建必须走这个脚本，而不能直接 `go build`**
+>
+> `vite` 产出在 `web/dist`，而 `go:embed` 读的是 `internal/webui/dist`。
+> 这两者之间的"同步"如果靠人记得手动做，早晚会出现「代码改了、界面没变」
+> 的幽灵问题 —— 所以固化成脚本，并在编译前校验 `web/dist/index.html` 存在。
+>
+> 全新克隆（还没构建过前端）也能 `go build` / `go test ./...`：内嵌目录里
+> 提交了一个 `.gitkeep` 占位。此时启动服务访问 `/` 会看到一个明确的
+> 「前端未构建」提示页，而不是白屏。
 
 ## 前端开发
 
 前端在 `web/`（Vue 3 + Vite + TypeScript + Element Plus + Pinia）。
+**改前端代码时用开发服务器**（改动即时生效，不用每次重新编译二进制）：
 
 ```bash
 cd web
@@ -99,10 +126,15 @@ export HRP_PLATFORM_TOOLS=F:/httprunnerplatform-tools
 # 载入开发环境（Go 工具链 + hrp 路径探测）
 source scripts/dev-env.sh
 
-# 构建并自检
-go build -o httprunnerplatform.exe ./cmd/server
+# 完整构建（含前端内嵌）—— 交付与自检都用它
+bash scripts/build.sh
 ./httprunnerplatform.exe doctor
 ```
+
+> 只改后端、想快速拿一个能跑的二进制时，可以跳过前端构建：
+> `SKIP_NPM=1 bash scripts/build.sh`（复用上次的 `web/dist`）。
+> 直接 `go build ./cmd/server` 也是合法的，但产物**不含前端**，
+> 访问 `/` 只会看到"前端未构建"提示页。
 
 > **磁盘注意事项**：Go 的构建缓存与临时目录默认在 `%LOCALAPPDATA%`（C 盘）。
 > 若 C 盘空间紧张，`go build` 会以 `There is not enough space on the disk` 失败。
