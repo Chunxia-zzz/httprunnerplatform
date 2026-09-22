@@ -1,0 +1,11 @@
+{"level":"info","time":"2026-09-22T20:17:10.808+0800","message":"log with json output"}
+{"level":"info","log_level":"INFO","time":"2026-09-22T20:17:10.808+0800","message":"set global log level"}
+{"level":"info","failfast":true,"time":"2026-09-22T20:17:10.808+0800","message":"[init] SetFailfast"}
+{"level":"info","saveTests":true,"time":"2026-09-22T20:17:10.808+0800","message":"[init] SetSaveTests"}
+{"level":"info","timeout_seconds":3600,"time":"2026-09-22T20:17:10.808+0800","message":"[init] SetCaseTimeout"}
+{"level":"info","time":"2026-09-22T20:17:10.808+0800","message":"[init] SetRequestsLogOn"}
+{"level":"info","hrp_version":"v4.3.6","time":"2026-09-22T20:17:10.808+0800","message":"start running"}
+{"level":"info","path":"cases\\broken.yml","time":"2026-09-22T20:17:10.809+0800","message":"load file"}
+{"level":"info","count":0,"time":"2026-09-22T20:17:10.81+0800","message":"load testcases successfully"}
+{"level":"info","path":"results\\20260922201710","time":"2026-09-22T20:17:10.81+0800","message":"create folder"}
+{"level":"info","path":"C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-fg\\results\\20260922201710\\summary.json","time":"2026-09-22T20:17:10.812+0800","message":"dump data to json"}

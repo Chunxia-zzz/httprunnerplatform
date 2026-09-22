@@ -1,0 +1,11 @@
+config:
+    name: "ENV-connection-refused"
+    verify: false
+teststeps:
+-
+    name: "connect to a port with nothing listening"
+    request:
+        method: GET
+        url: http://127.0.0.1:9999/get
+    validate:
+        - eq: ["status_code", 200]

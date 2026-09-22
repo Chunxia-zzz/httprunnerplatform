@@ -1,0 +1,30 @@
+config:
+    name: "A 全部通过"
+    verify: false
+    variables:
+        expect_status: 200
+
+teststeps:
+-
+    name: "步骤1 GET /get 带 query 参数"
+    request:
+        method: GET
+        url: $base_url/get
+        params:
+            foo1: bar1
+    validate:
+        - eq: ["status_code", 200]
+        - eq: ["body.args.foo1", "bar1"]
+-
+    name: "步骤2 POST /post 带 JSON body"
+    request:
+        method: POST
+        url: $base_url/post
+        headers:
+            Content-Type: "application/json"
+        body:
+            name: tester
+            age: 18
+    validate:
+        - eq: ["status_code", 200]
+        - eq: ["body.json.name", "tester"]

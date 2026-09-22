@@ -1,0 +1,14 @@
+config:
+    name: "BODY-json-field"
+    verify: false
+teststeps:
+-
+    name: "using json field without content-type header"
+    request:
+        method: POST
+        url: $base_url/anything/b1
+        json:
+            name: tester
+            age: 18
+    validate:
+        - eq: ["status_code", 200]

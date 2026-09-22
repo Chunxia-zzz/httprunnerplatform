@@ -1,0 +1,72 @@
+# httprunnerplatform 配置示例
+#
+# 复制为 configs/config.yaml 后按需修改。
+# configs/config.yaml 已被 .gitignore 忽略，不会入库。
+#
+# 注意：引擎相关默认值来自方案文档第三章「引擎事实基线」，
+#      其中 case_timeout 与 telemetry 两项是针对引擎默认行为的有意覆盖。
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  mode: release # debug | release
+
+database:
+  driver: mysql
+  dsn: "root:password@tcp(127.0.0.1:3306)/httprunnerplatform?charset=utf8mb4&parseTime=True&loc=Local"
+  max_open_conns: 20
+  max_idle_conns: 5
+
+engine:
+  # hrp 二进制路径。留空则依次回退到环境变量 HRP_BINARY_PATH、
+  # 以及 %TOOLS_ROOT%/bin/hrp[.exe]。代码中不硬编码。
+  binary_path: ""
+
+  # 用例级超时（秒）。
+  # ⚠️ 引擎 --case-timeout 默认 3600 秒（文档未记录，但二进制 help 已确认），
+  #    对平台而言过长：一个卡死用例会占用执行槽一小时。此处有意下调。
+  default_case_timeout: 300
+
+  # 执行并发上限（进程内 worker pool）。
+  # 10 人团队峰值并发执行 2-4 个任务，4C8G 机器取 2-3 足够。
+  max_concurrency: 3
+
+  # 关闭引擎遥测（GA4 / Sentry）。
+  #
+  # 平台会在起子进程时注入 DISABLE_GA=true / DISABLE_SENTRY=true。
+  # ⚠️ 必须是子进程的环境变量：引擎在包初始化阶段就用 os.Getenv 读掉了，
+  #    进程起来之后再改无效；而且比较的是字符串 "true"（写 1 / TRUE 都无效）。
+  #
+  # 为什么默认关（实测 A20，两笔账）：
+  #   1. GA4 的 HTTP client 超时 5 秒，内网/无外网时必然耗满，直接算进用例耗时
+  #      （实测同一条用例 1.4s → 6.9s）；
+  #   2. 上报失败用 log.Error() 打日志，在 stderr 里与"用例失败"同形，
+  #      结果是一条**成功**的执行挂着 error_msg。
+  # parser 里另有一层前缀过滤兜底，但那是治标，这里关掉才是治本。
+  disable_telemetry: true
+
+  # python3 venv 路径。留空则使用引擎默认（~/.hrp/venv）。
+  # 仅当启用 debugtalk.py 自定义函数时才需要。
+  python_venv: ""
+
+workspace:
+  # 工作区根目录。
+  #   {root}/workspaces/{project_code}/   持久层：.env / debugtalk.py / api / testcases / suites / data
+  #   {root}/runtime/runs/{run_id}/       运行层：每次执行的隔离工作区副本
+  #   {root}/runtime/reports/             运行层：HTML 报告归档
+  root: ./data
+  run_retention_days: 90
+
+log:
+  # 与 hrp 使用同一个日志库（zerolog），格式保持一致便于串联排查
+  level: info # debug | info | warn | error
+  json: true
+
+notify:
+  webhook:
+    enabled: false
+    url: ""
+
+auth:
+  jwt_secret: "change-me-in-production"
+  token_ttl_hours: 24

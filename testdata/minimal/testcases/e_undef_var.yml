@@ -1,0 +1,14 @@
+config:
+    name: "E 引用未定义变量（用于实测退出码 21）"
+    verify: false
+
+teststeps:
+-
+    name: "步骤1 引用了不存在的变量"
+    request:
+        method: GET
+        url: $base_url/get
+        params:
+            v: $this_variable_does_not_exist
+    validate:
+        - eq: ["status_code", 200]

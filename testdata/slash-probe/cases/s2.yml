@@ -1,0 +1,38 @@
+config:
+    name: "SLASH-probe2"
+    verify: false
+teststeps:
+-
+    name: "s1 inline query no params block"
+    request:
+        method: GET
+        url: $base_url/anything/abc?inline=1
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "s2 trailing slash plus params block"
+    request:
+        method: GET
+        url: $base_url/anything/abc/
+        params:
+            k: v
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "s3 single segment"
+    request:
+        method: GET
+        url: $base_url/anything
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "s4 post with json body no query"
+    request:
+        method: POST
+        url: $base_url/anything/xyz
+        headers:
+            Content-Type: "application/json"
+        body:
+            a: 1
+    validate:
+        - eq: ["status_code", 200]

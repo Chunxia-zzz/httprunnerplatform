@@ -1,0 +1,18 @@
+config:
+    name: "ASSERT-two-steps-second-fails"
+    verify: false
+teststeps:
+-
+    name: "step1 ok"
+    request:
+        method: GET
+        url: $base_url/get
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "step2 status mismatch"
+    request:
+        method: GET
+        url: $base_url/get
+    validate:
+        - eq: ["status_code", 201]

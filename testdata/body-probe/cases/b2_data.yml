@@ -1,0 +1,14 @@
+config:
+    name: "BODY-data-field"
+    verify: false
+teststeps:
+-
+    name: "using data field for form"
+    request:
+        method: POST
+        url: $base_url/anything/b2
+        data:
+            name: tester
+            age: "18"
+    validate:
+        - eq: ["status_code", 200]

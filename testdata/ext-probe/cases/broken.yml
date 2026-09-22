@@ -1,0 +1,5 @@
+config:
+    name: "EXT-malformed"
+  bad_indent: [
+teststeps:
+  - this is not valid yaml at all

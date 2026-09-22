@@ -1,0 +1,155 @@
+{
+    "success": true,
+    "stat": {
+        "testcases": {
+            "total": 1,
+            "success": 1,
+            "fail": 0
+        },
+        "teststeps": {
+            "total": 2,
+            "successes": 2,
+            "failures": 0
+        }
+    },
+    "time": {
+        "start_at": "2026-09-22T20:00:30.6262673+08:00",
+        "duration": 0.7376898
+    },
+    "platform": {
+        "httprunner_version": "v4.3.6",
+        "go_version": "go1.21.1",
+        "platform": "windows-amd64"
+    },
+    "details": [
+        {
+            "name": "A 全部通过",
+            "success": true,
+            "stat": {
+                "total": 2,
+                "successes": 2,
+                "failures": 0
+            },
+            "time": {
+                "start_at": "2026-09-22T20:00:30.7509168+08:00",
+                "duration": 0.6130403
+            },
+            "in_out": {
+                "config_vars": {
+                    "base_url": "http://127.0.0.1:8899",
+                    "expect_status": 200
+                },
+                "export_vars": {
+                    
+                }
+            },
+            "records": [
+                {
+                    "name": "步骤1 GET /get 带 query 参数",
+                    "start_time": 1790078431,
+                    "step_type": "request",
+                    "success": true,
+                    "elapsed_ms": 1,
+                    "data": {
+                        "success": true,
+                        "req_resps": {
+                            "request": {
+                                "headers": {
+    
+},
+                                "method": "GET",
+                                "url": "http://127.0.0.1:8899/get?foo1=bar1"
+                            },
+                            "response": {
+                                "body": "{\n    \"args\": {\n    \"foo1\": \"bar1\"\n},\n    \"data\": \"\",\n    \"headers\": {\n    \"Accept-Encoding\": \"gzip\",\n    \"Host\": \"127.0.0.1:8899\",\n    \"User-Agent\": \"Go-http-client/1.1\"\n},\n    \"method\": \"GET\",\n    \"path\": \"/get\",\n    \"url\": \"http://127.0.0.1:8899/get?foo1=bar1\"\n}",
+                                "cookies": {
+    
+},
+                                "headers": {
+    "Content-Length": "219",
+    "Content-Type": "application/json; charset=utf-8",
+    "Date": "Tue, 22 Sep 2026 12:00:31 GMT",
+    "Server": "LocalEcho/1.0 Python/3.13.14"
+},
+                                "proto": "HTTP/1.1",
+                                "status_code": 200
+                            }
+                        },
+                        "validators": [
+                            {
+                                "check": "status_code",
+                                "assert": "eq",
+                                "expect": 200,
+                                "check_value": 200,
+                                "check_result": "pass"
+                            },
+                            {
+                                "check": "body.args.foo1",
+                                "assert": "eq",
+                                "expect": "bar1",
+                                "check_value": "bar1",
+                                "check_result": "pass"
+                            }
+                        ]
+                    },
+                    "content_size": 219
+                },
+                {
+                    "name": "步骤2 POST /post 带 JSON body",
+                    "start_time": 1790078431,
+                    "step_type": "request",
+                    "success": true,
+                    "elapsed_ms": 0,
+                    "data": {
+                        "success": true,
+                        "req_resps": {
+                            "request": {
+                                "body": {
+    "age": 18,
+    "name": "tester"
+},
+                                "headers": {
+    "Content-Type": "application/json"
+},
+                                "method": "POST",
+                                "url": "http://127.0.0.1:8899/post/"
+                            },
+                            "response": {
+                                "body": "{\n    \"args\": {\n    \n},\n    \"data\": \"{\\\"age\\\":18,\\\"name\\\":\\\"tester\\\"}\",\n    \"headers\": {\n    \"Accept-Encoding\": \"gzip\",\n    \"Content-Length\": \"26\",\n    \"Content-Type\": \"application/json\",\n    \"Host\": \"127.0.0.1:8899\",\n    \"User-Agent\": \"Go-http-client/1.1\"\n},\n    \"json\": {\n    \"age\": 18,\n    \"name\": \"tester\"\n},\n    \"method\": \"POST\",\n    \"path\": \"/post/\",\n    \"url\": \"http://127.0.0.1:8899/post/\"\n}",
+                                "cookies": {
+    
+},
+                                "headers": {
+    "Content-Length": "331",
+    "Content-Type": "application/json; charset=utf-8",
+    "Date": "Tue, 22 Sep 2026 12:00:31 GMT",
+    "Server": "LocalEcho/1.0 Python/3.13.14"
+},
+                                "proto": "HTTP/1.1",
+                                "status_code": 200
+                            }
+                        },
+                        "validators": [
+                            {
+                                "check": "status_code",
+                                "assert": "eq",
+                                "expect": 200,
+                                "check_value": 200,
+                                "check_result": "pass"
+                            },
+                            {
+                                "check": "body.json.name",
+                                "assert": "eq",
+                                "expect": "tester",
+                                "check_value": "tester",
+                                "check_result": "pass"
+                            }
+                        ]
+                    },
+                    "content_size": 331
+                }
+            ],
+            "root_dir": ""
+        }
+    ]
+}

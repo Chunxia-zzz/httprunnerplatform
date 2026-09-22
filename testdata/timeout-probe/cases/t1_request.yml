@@ -1,0 +1,12 @@
+config:
+    name: "TIMEOUT-request-level"
+    verify: false
+teststeps:
+    -
+        name: "request timeout 1s against delay 6s"
+        request:
+            method: GET
+            url: $base_url/delay/6?x=1
+            timeout: 1
+        validate:
+            - eq: ["status_code", 200]

@@ -1,0 +1,60 @@
+{"level":"info","time":"2026-09-22T20:00:42.344+0800","message":"log with json output"}
+{"level":"info","log_level":"INFO","time":"2026-09-22T20:00:42.345+0800","message":"set global log level"}
+{"level":"info","failfast":true,"time":"2026-09-22T20:00:42.345+0800","message":"[init] SetFailfast"}
+{"level":"info","saveTests":true,"time":"2026-09-22T20:00:42.345+0800","message":"[init] SetSaveTests"}
+{"level":"info","timeout_seconds":3600,"time":"2026-09-22T20:00:42.345+0800","message":"[init] SetCaseTimeout"}
+{"level":"info","time":"2026-09-22T20:00:42.345+0800","message":"[init] SetRequestsLogOn"}
+{"level":"info","hrp_version":"v4.3.6","time":"2026-09-22T20:00:42.345+0800","message":"start running"}
+{"level":"info","path":"cases\\a_status.yml","time":"2026-09-22T20:00:42.345+0800","message":"load file"}
+{"level":"info","path":"C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-run\\.env","time":"2026-09-22T20:00:42.351+0800","message":"load file"}
+{"level":"info","key":"base_url","time":"2026-09-22T20:00:42.351+0800","message":"set env"}
+{"level":"info","count":1,"time":"2026-09-22T20:00:42.351+0800","message":"load testcases successfully"}
+{"level":"warn","path":"cases\\a_status.yml","time":"2026-09-22T20:00:42.356+0800","message":"locate plugin failed"}
+{"level":"info","time":"2026-09-22T20:00:42.356+0800","message":"reset session runner"}
+{"level":"info","testcase":"ASSERT-status-mismatch","time":"2026-09-22T20:00:46.468+0800","message":"run testcase start"}
+{"level":"info","step":"status_code expects 201 but server returns 200","type":"request-GET","time":"2026-09-22T20:00:46.468+0800","message":"run step start"}
+panic: runtime error: invalid memory address or nil pointer dereference [recovered]
+	panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0xc00046eb50 addr=0xa176c0 pc=0xe56820]
+
+goroutine 1 [running]:
+main.main.func1()
+	/github/workspace/hrp/cmd/cli/main.go:20 +0x6b
+panic({0xfe1560?, 0x18b1510?})
+	/usr/local/go/src/runtime/panic.go:914 +0x21f
+testing.(*common).decorate(0x6b0f73?, {0xc00048b400, 0x3c5}, 0x0?)
+	/usr/local/go/src/testing/testing.go:772 +0xa0
+testing.(*common).logDepth(0xc00025a820, {0xc00048b400, 0x3c5}, 0x3)
+	/usr/local/go/src/testing/testing.go:1035 +0x1dd
+testing.(*common).log(...)
+	/usr/local/go/src/testing/testing.go:1004
+testing.(*common).Errorf(0xc00025a820, {0x1108464?, 0x6aeac5?}, {0xc000054fe0?, 0x0?, 0x4000000000000000?})
+	/usr/local/go/src/testing/testing.go:1068 +0x54
+github.com/stretchr/testify/assert.Fail({0x127ba00, 0xc00025a820}, {0xc0000b05a0, 0x27}, {0xc00046f540, 0x1, 0x1})
+	/go/pkg/mod/github.com/stretchr/testify@v1.8.4/assert/assertions.go:333 +0x350
+github.com/stretchr/testify/assert.EqualValues({0x127ba00, 0xc00025a820}, {0xf84840, 0x1854148}, {0xf84840, 0x1854140}, {0xc00046f540, 0x1, 0x1})
+	/go/pkg/mod/github.com/stretchr/testify@v1.8.4/assert/assertions.go:538 +0x1e5
+github.com/httprunner/httprunner/v4/hrp/internal/builtin.EqualValues({0x127ba00, 0xc00025a820}, {0xf84840, 0x1854140}, {0xf84840, 0x1854148}, {0x0?, 0x6b3510?, 0x179c7d92d0?})
+	/github/workspace/hrp/internal/builtin/assertion.go:53 +0xa5
+github.com/httprunner/httprunner/v4/hrp.(*responseObject).Validate(0xc000056340, {0xc00022b6a0?, 0x1, 0x8?}, 0x609c17e400000076?)
+	/github/workspace/hrp/response.go:198 +0x336
+github.com/httprunner/httprunner/v4/hrp.runStepRequest(0xc00017ec60, 0xc00022c1c0)
+	/github/workspace/hrp/step_request.go:431 +0xeec
+github.com/httprunner/httprunner/v4/hrp.(*StepRequestWithOptionalArgs).Run(0xc00026a8c0?, 0x1113d8d?)
+	/github/workspace/hrp/step_request.go:881 +0x1c
+github.com/httprunner/httprunner/v4/hrp.(*SessionRunner).Start(0xc00017ec60, 0xc00012be00?)
+	/github/workspace/hrp/runner.go:577 +0x97a
+github.com/httprunner/httprunner/v4/hrp.(*HRPRunner).Run(0xc000182c80, {0xc00022b360, 0x1, 0x1})
+	/github/workspace/hrp/runner.go:247 +0x5a9
+github.com/httprunner/httprunner/v4/hrp/cmd.glob..func7(0xc0001eb200?, {0xc000253950?, 0x1, 0x1108915?})
+	/github/workspace/hrp/cmd/run.go:25 +0x14f
+github.com/spf13/cobra.(*Command).execute(0x18d0c40, {0xc000154020, 0x3, 0x6})
+	/go/pkg/mod/github.com/spf13/cobra@v1.5.0/command.go:872 +0x6aa
+github.com/spf13/cobra.(*Command).ExecuteC(0x18d0240)
+	/go/pkg/mod/github.com/spf13/cobra@v1.5.0/command.go:990 +0x38d
+github.com/spf13/cobra.(*Command).Execute(...)
+	/go/pkg/mod/github.com/spf13/cobra@v1.5.0/command.go:918
+github.com/httprunner/httprunner/v4/hrp/cmd.Execute()
+	/github/workspace/hrp/cmd/root.go:65 +0x13f
+main.main()
+	/github/workspace/hrp/cmd/cli/main.go:24 +0x30

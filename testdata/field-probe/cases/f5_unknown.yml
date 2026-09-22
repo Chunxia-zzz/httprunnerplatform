@@ -1,0 +1,13 @@
+config:
+    name: "FIELD-unknown-key"
+    verify: false
+    this_key_does_not_exist: 123
+teststeps:
+    -
+        name: "request with bogus field"
+        request:
+            method: GET
+            url: $base_url/get
+            bogus_field_xyz: "hello"
+        validate:
+            - eq: ["status_code", 200]

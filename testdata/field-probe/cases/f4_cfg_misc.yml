@@ -1,0 +1,16 @@
+config:
+    name: "FIELD-config-misc"
+    verify: false
+    weight: 1
+    parameters:
+        p1: [1, 2]
+teststeps:
+    -
+        name: "config with parameters and weight"
+        request:
+            method: GET
+            url: $base_url/get
+            params:
+                p1: $p1
+        validate:
+            - eq: ["status_code", 200]

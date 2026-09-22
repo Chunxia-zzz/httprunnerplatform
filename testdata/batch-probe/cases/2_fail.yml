@@ -1,0 +1,11 @@
+config:
+    name: "BATCH-2-fail"
+    verify: false
+teststeps:
+-
+    name: "will fail assertion"
+    request:
+        method: GET
+        url: $base_url/get
+    validate:
+        - eq: ["status_code", 201]

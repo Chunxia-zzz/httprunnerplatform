@@ -1,0 +1,15 @@
+config:
+    name: "FIELD-step-hooks"
+    verify: false
+teststeps:
+    -
+        name: "step level hooks"
+        setup_hooks:
+            - "${no_such_hook()}"
+        teardown_hooks:
+            - "${no_such_hook()}"
+        request:
+            method: GET
+            url: $base_url/get
+        validate:
+            - eq: ["status_code", 200]

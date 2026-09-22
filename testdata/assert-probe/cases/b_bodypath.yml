@@ -1,0 +1,11 @@
+config:
+    name: "ASSERT-missing-body-path"
+    verify: false
+teststeps:
+-
+    name: "body path does not exist"
+    request:
+        method: GET
+        url: $base_url/get
+    validate:
+        - eq: ["body.no_such_key.deep", "x"]

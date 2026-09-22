@@ -1,0 +1,20 @@
+{"level":"info","time":"2026-09-22T20:00:57.498+0800","message":"log with json output"}
+{"level":"info","log_level":"INFO","time":"2026-09-22T20:00:57.498+0800","message":"set global log level"}
+{"level":"info","failfast":true,"time":"2026-09-22T20:00:57.498+0800","message":"[init] SetFailfast"}
+{"level":"info","saveTests":true,"time":"2026-09-22T20:00:57.498+0800","message":"[init] SetSaveTests"}
+{"level":"info","timeout_seconds":3600,"time":"2026-09-22T20:00:57.498+0800","message":"[init] SetCaseTimeout"}
+{"level":"info","time":"2026-09-22T20:00:57.498+0800","message":"[init] SetRequestsLogOn"}
+{"level":"info","hrp_version":"v4.3.6","time":"2026-09-22T20:00:57.498+0800","message":"start running"}
+{"level":"info","path":"cases\\e_conn_refused.yml","time":"2026-09-22T20:00:57.499+0800","message":"load file"}
+{"level":"info","path":"C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-run\\.env","time":"2026-09-22T20:00:57.506+0800","message":"load file"}
+{"level":"info","key":"base_url","time":"2026-09-22T20:00:57.506+0800","message":"set env"}
+{"level":"info","count":1,"time":"2026-09-22T20:00:57.506+0800","message":"load testcases successfully"}
+{"level":"warn","path":"cases\\e_conn_refused.yml","time":"2026-09-22T20:00:57.511+0800","message":"locate plugin failed"}
+{"level":"info","time":"2026-09-22T20:00:57.511+0800","message":"reset session runner"}
+{"level":"info","testcase":"ENV-connection-refused","time":"2026-09-22T20:00:58.06+0800","message":"run testcase start"}
+{"level":"info","step":"connect to a port with nothing listening","type":"request-GET","time":"2026-09-22T20:00:58.06+0800","message":"run step start"}
+{"level":"error","error":"do request failed: Get \"http://127.0.0.1:9999/get/\": dial tcp 127.0.0.1:9999: connectex: No connection could be made because the target machine actively refused it.","step":"connect to a port with nothing listening","type":"request-GET","success":false,"elapsed(ms)":0,"time":"2026-09-22T20:00:58.061+0800","message":"run step end"}
+{"level":"error","error":"abort running due to failfast setting: do request failed: Get \"http://127.0.0.1:9999/get/\": dial tcp 127.0.0.1:9999: connectex: No connection could be made because the target machine actively refused it.","time":"2026-09-22T20:00:58.061+0800","message":"[Run] run testcase failed"}
+{"level":"info","path":"results\\20260922200057","time":"2026-09-22T20:00:58.062+0800","message":"create folder"}
+{"level":"info","path":"C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-run\\results\\20260922200057\\summary.json","time":"2026-09-22T20:00:58.063+0800","message":"dump data to json"}
+Error: abort running due to failfast setting: do request failed: Get "http://127.0.0.1:9999/get/": dial tcp 127.0.0.1:9999: connectex: No connection could be made because the target machine actively refused it.

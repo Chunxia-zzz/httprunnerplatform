@@ -1,0 +1,14 @@
+# 路径③：断言失败（引擎 panic，退出码 2）—— 遥测惩罚最大的一条路径
+config:
+    name: "TEL-probe assertion failed"
+    verify: false
+teststeps:
+-
+    name: "step1 expect 500"
+    request:
+        method: GET
+        url: $base_url/get
+        params:
+            a: "1"
+    validate:
+        - eq: ["status_code", 500]

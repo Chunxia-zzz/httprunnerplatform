@@ -1,0 +1,31 @@
+-------------------- request --------------------
+GET /get?foo1=bar1 HTTP/1.1
+Host: 127.0.0.1:8899
+
+
+==================== response ====================
+Connected via plaintext
+HTTP/1.1 200 OK
+Content-Length: 219
+Content-Type: application/json; charset=utf-8
+Date: Tue, 22 Sep 2026 12:00:31 GMT
+Server: LocalEcho/1.0 Python/3.13.14
+
+{"args": {"foo1": "bar1"}, "headers": {"Host": "127.0.0.1:8899", "User-Agent": "Go-http-client/1.1", "Accept-Encoding": "gzip"}, "method": "GET", "path": "/get", "url": "http://127.0.0.1:8899/get?foo1=bar1", "data": ""}
+--------------------------------------------------
+-------------------- request --------------------
+POST /post/ HTTP/1.1
+Host: 127.0.0.1:8899
+Content-Type: application/json
+
+{"age":18,"name":"tester"}
+==================== response ====================
+Connected via plaintext
+HTTP/1.1 200 OK
+Content-Length: 331
+Content-Type: application/json; charset=utf-8
+Date: Tue, 22 Sep 2026 12:00:31 GMT
+Server: LocalEcho/1.0 Python/3.13.14
+
+{"args": {}, "headers": {"Host": "127.0.0.1:8899", "User-Agent": "Go-http-client/1.1", "Content-Length": "26", "Content-Type": "application/json", "Accept-Encoding": "gzip"}, "method": "POST", "path": "/post/", "url": "http://127.0.0.1:8899/post/", "data": "{\"age\":18,\"name\":\"tester\"}", "json": {"age": 18, "name": "tester"}}
+--------------------------------------------------

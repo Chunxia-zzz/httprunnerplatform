@@ -1,0 +1,11 @@
+config:
+    name: "ASSERT-status-mismatch"
+    verify: false
+teststeps:
+-
+    name: "status_code expects 201 but server returns 200"
+    request:
+        method: GET
+        url: $base_url/get
+    validate:
+        - eq: ["status_code", 201]

@@ -1,0 +1,27 @@
+config:
+    name: "SLASH-probe"
+    verify: false
+teststeps:
+-
+    name: "step1 bare path no query"
+    request:
+        method: GET
+        url: $base_url/anything/abc
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "step2 explicit trailing slash"
+    request:
+        method: GET
+        url: $base_url/anything/abc/
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "step3 bare path with query"
+    request:
+        method: GET
+        url: $base_url/anything/abc
+        params:
+            k: v
+    validate:
+        - eq: ["status_code", 200]

@@ -1,0 +1,59 @@
+{
+    "success": false,
+    "stat": {
+        "testcases": {
+            "total": 1,
+            "success": 0,
+            "fail": 1
+        },
+        "teststeps": {
+            "total": 1,
+            "successes": 0,
+            "failures": 1
+        }
+    },
+    "time": {
+        "start_at": "2026-09-22T20:01:13.0548584+08:00",
+        "duration": 0.2468391
+    },
+    "platform": {
+        "httprunner_version": "v4.3.6",
+        "go_version": "go1.21.1",
+        "platform": "windows-amd64"
+    },
+    "details": [
+        {
+            "name": "E 引用未定义变量（用于实测退出码 21）",
+            "success": false,
+            "stat": {
+                "total": 1,
+                "successes": 0,
+                "failures": 1
+            },
+            "time": {
+                "start_at": "2026-09-22T20:01:13.1763837+08:00",
+                "duration": 0.1253138
+            },
+            "in_out": {
+                "config_vars": {
+                    "base_url": "http://127.0.0.1:8899"
+                },
+                "export_vars": {
+                    
+                }
+            },
+            "records": [
+                {
+                    "name": "步骤1 引用了不存在的变量",
+                    "start_time": 1790078473,
+                    "step_type": "request",
+                    "success": false,
+                    "elapsed_ms": 0,
+                    "content_size": 0,
+                    "attachments": "parse request params failed: variable this_variable_does_not_exist not found: variable not found"
+                }
+            ],
+            "root_dir": ""
+        }
+    ]
+}

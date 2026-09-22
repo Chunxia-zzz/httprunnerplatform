@@ -1,0 +1,15 @@
+config:
+    name: "C 断言故意写错（用于实测失败退出码）"
+    verify: false
+
+teststeps:
+-
+    name: "步骤1 状态码断言正确、字段断言故意写错"
+    request:
+        method: GET
+        url: $base_url/get
+        params:
+            foo: bar
+    validate:
+        - eq: ["status_code", 200]
+        - eq: ["body.args.foo", "NOT_bar"]

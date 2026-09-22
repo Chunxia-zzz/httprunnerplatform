@@ -1,0 +1,15 @@
+config:
+    name: "FIELD-request-hooks"
+    verify: false
+teststeps:
+    -
+        name: "request level hooks"
+        request:
+            method: GET
+            url: $base_url/get
+            setup_hooks:
+                - "${no_such_hook()}"
+            teardown_hooks:
+                - "${no_such_hook()}"
+        validate:
+            - eq: ["status_code", 200]

@@ -1,0 +1,59 @@
+{
+    "success": false,
+    "stat": {
+        "testcases": {
+            "total": 1,
+            "success": 0,
+            "fail": 1
+        },
+        "teststeps": {
+            "total": 1,
+            "successes": 0,
+            "failures": 1
+        }
+    },
+    "time": {
+        "start_at": "2026-09-22T20:01:08.0532186+08:00",
+        "duration": 0.2999514
+    },
+    "platform": {
+        "httprunner_version": "v4.3.6",
+        "go_version": "go1.21.1",
+        "platform": "windows-amd64"
+    },
+    "details": [
+        {
+            "name": "FIELD-step-hooks",
+            "success": false,
+            "stat": {
+                "total": 1,
+                "successes": 0,
+                "failures": 1
+            },
+            "time": {
+                "start_at": "2026-09-22T20:01:08.1901387+08:00",
+                "duration": 0.1630313
+            },
+            "in_out": {
+                "config_vars": {
+                    "base_url": "http://127.0.0.1:9999"
+                },
+                "export_vars": {
+                    
+                }
+            },
+            "records": [
+                {
+                    "name": "step level hooks",
+                    "start_time": 1790078468,
+                    "step_type": "request",
+                    "success": false,
+                    "elapsed_ms": 0,
+                    "content_size": 0,
+                    "attachments": "run setup hooks failed: function no_such_hook is not found: call function failed"
+                }
+            ],
+            "root_dir": ""
+        }
+    ]
+}

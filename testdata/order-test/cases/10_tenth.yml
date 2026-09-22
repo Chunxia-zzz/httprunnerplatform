@@ -1,0 +1,11 @@
+config:
+    name: "ORDER-10_tenth"
+    verify: false
+teststeps:
+-
+    name: "only step"
+    request:
+        method: GET
+        url: $base_url/get
+    validate:
+        - eq: ["status_code", 200]

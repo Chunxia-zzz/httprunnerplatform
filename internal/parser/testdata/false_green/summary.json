@@ -1,0 +1,25 @@
+{
+    "success": true,
+    "stat": {
+        "testcases": {
+            "total": 0,
+            "success": 0,
+            "fail": 0
+        },
+        "teststeps": {
+            "total": 0,
+            "successes": 0,
+            "failures": 0
+        }
+    },
+    "time": {
+        "start_at": "2026-09-22T20:17:10.48548+08:00",
+        "duration": 0.3246351
+    },
+    "platform": {
+        "httprunner_version": "v4.3.6",
+        "go_version": "go1.21.1",
+        "platform": "windows-amd64"
+    },
+    "details": null
+}

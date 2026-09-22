@@ -1,0 +1,59 @@
+{
+    "success": false,
+    "stat": {
+        "testcases": {
+            "total": 1,
+            "success": 0,
+            "fail": 1
+        },
+        "teststeps": {
+            "total": 1,
+            "successes": 0,
+            "failures": 1
+        }
+    },
+    "time": {
+        "start_at": "2026-09-22T20:00:57.3855831+08:00",
+        "duration": 0.6758829
+    },
+    "platform": {
+        "httprunner_version": "v4.3.6",
+        "go_version": "go1.21.1",
+        "platform": "windows-amd64"
+    },
+    "details": [
+        {
+            "name": "ENV-connection-refused",
+            "success": false,
+            "stat": {
+                "total": 1,
+                "successes": 0,
+                "failures": 1
+            },
+            "time": {
+                "start_at": "2026-09-22T20:00:57.5111901+08:00",
+                "duration": 0.5502759
+            },
+            "in_out": {
+                "config_vars": {
+                    "base_url": "http://127.0.0.1:8899"
+                },
+                "export_vars": {
+                    
+                }
+            },
+            "records": [
+                {
+                    "name": "connect to a port with nothing listening",
+                    "start_time": 1790078458,
+                    "step_type": "request",
+                    "success": false,
+                    "elapsed_ms": 0,
+                    "content_size": 0,
+                    "attachments": "do request failed: Get \"http://127.0.0.1:9999/get/\": dial tcp 127.0.0.1:9999: connectex: No connection could be made because the target machine actively refused it."
+                }
+            ],
+            "root_dir": ""
+        }
+    ]
+}

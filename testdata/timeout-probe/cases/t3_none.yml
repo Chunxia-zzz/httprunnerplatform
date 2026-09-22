@@ -1,0 +1,11 @@
+config:
+    name: "TIMEOUT-none"
+    verify: false
+teststeps:
+    -
+        name: "no timeout against delay 3s (control)"
+        request:
+            method: GET
+            url: $base_url/delay/3?x=1
+        validate:
+            - eq: ["status_code", 200]

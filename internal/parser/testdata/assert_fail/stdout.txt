@@ -1,0 +1,15 @@
+-------------------- request --------------------
+GET /get/ HTTP/1.1
+Host: 127.0.0.1:8899
+
+
+==================== response ====================
+Connected via plaintext
+HTTP/1.1 200 OK
+Content-Length: 197
+Content-Type: application/json; charset=utf-8
+Date: Tue, 22 Sep 2026 12:00:46 GMT
+Server: LocalEcho/1.0 Python/3.13.14
+
+{"args": {}, "headers": {"Host": "127.0.0.1:8899", "User-Agent": "Go-http-client/1.1", "Accept-Encoding": "gzip"}, "method": "GET", "path": "/get/", "url": "http://127.0.0.1:8899/get/", "data": ""}
+--------------------------------------------------

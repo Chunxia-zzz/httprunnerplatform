@@ -1,0 +1,14 @@
+config:
+    name: "BODY-form-rawstring"
+    verify: false
+teststeps:
+-
+    name: "data as urlencoded raw string plus explicit content-type"
+    request:
+        method: POST
+        url: $base_url/anything/b4
+        headers:
+            Content-Type: "application/x-www-form-urlencoded"
+        data: "username=tester&password=123"
+    validate:
+        - eq: ["status_code", 200]

@@ -1,0 +1,27 @@
+config:
+    name: "B 多步骤 + extract 参数关联"
+    verify: false
+    export: ["token"]
+
+teststeps:
+-
+    name: "步骤1 获取 token"
+    request:
+        method: GET
+        url: $base_url/get
+        params:
+            token: abc12345
+    extract:
+        token: "body.args.token"
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "步骤2 复用上一步提取的 token"
+    request:
+        method: GET
+        url: $base_url/get
+        params:
+            token: $token
+    validate:
+        - eq: ["status_code", 200]
+        - eq: ["body.args.token", "abc12345"]

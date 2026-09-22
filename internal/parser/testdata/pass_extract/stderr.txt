@@ -1,0 +1,26 @@
+{"level":"info","time":"2026-09-22T20:00:36.585+0800","message":"log with json output"}
+{"level":"info","log_level":"INFO","time":"2026-09-22T20:00:36.585+0800","message":"set global log level"}
+{"level":"info","failfast":true,"time":"2026-09-22T20:00:36.585+0800","message":"[init] SetFailfast"}
+{"level":"info","saveTests":true,"time":"2026-09-22T20:00:36.585+0800","message":"[init] SetSaveTests"}
+{"level":"info","timeout_seconds":3600,"time":"2026-09-22T20:00:36.585+0800","message":"[init] SetCaseTimeout"}
+{"level":"info","time":"2026-09-22T20:00:36.585+0800","message":"[init] SetRequestsLogOn"}
+{"level":"info","hrp_version":"v4.3.6","time":"2026-09-22T20:00:36.585+0800","message":"start running"}
+{"level":"info","path":"testcases\\b_extract.yml","time":"2026-09-22T20:00:36.585+0800","message":"load file"}
+{"level":"info","path":"C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-run\\.env","time":"2026-09-22T20:00:36.592+0800","message":"load file"}
+{"level":"info","key":"base_url","time":"2026-09-22T20:00:36.593+0800","message":"set env"}
+{"level":"info","count":1,"time":"2026-09-22T20:00:36.593+0800","message":"load testcases successfully"}
+{"level":"warn","path":"testcases\\b_extract.yml","time":"2026-09-22T20:00:36.598+0800","message":"locate plugin failed"}
+{"level":"info","time":"2026-09-22T20:00:36.598+0800","message":"reset session runner"}
+{"level":"info","testcase":"B 多步骤 + extract 参数关联","time":"2026-09-22T20:00:37.377+0800","message":"run testcase start"}
+{"level":"info","step":"步骤1 获取 token","type":"request-GET","time":"2026-09-22T20:00:37.377+0800","message":"run step start"}
+{"level":"info","from":"body.args.token","value":"abc12345","time":"2026-09-22T20:00:37.38+0800","message":"extract value"}
+{"level":"info","variable":"token","value":"abc12345","time":"2026-09-22T20:00:37.38+0800","message":"set variable"}
+{"level":"info","checkExpr":"status_code","assertMethod":"eq","expectValue":200,"expectValueType":"int64","checkValue":200,"checkValueType":"int64","result":true,"time":"2026-09-22T20:00:37.38+0800","message":"validate status_code"}
+{"level":"info","step":"步骤1 获取 token","type":"request-GET","success":true,"elapsed(ms)":3,"exportVars":{"token":"abc12345"},"time":"2026-09-22T20:00:37.38+0800","message":"run step end"}
+{"level":"info","step":"步骤2 复用上一步提取的 token","type":"request-GET","time":"2026-09-22T20:00:37.38+0800","message":"run step start"}
+{"level":"info","checkExpr":"status_code","assertMethod":"eq","expectValue":200,"expectValueType":"int64","checkValue":200,"checkValueType":"int64","result":true,"time":"2026-09-22T20:00:37.382+0800","message":"validate status_code"}
+{"level":"info","checkExpr":"body.args.token","assertMethod":"eq","expectValue":"abc12345","expectValueType":"string","checkValue":"abc12345","checkValueType":"string","result":true,"time":"2026-09-22T20:00:37.382+0800","message":"validate body.args.token"}
+{"level":"info","step":"步骤2 复用上一步提取的 token","type":"request-GET","success":true,"elapsed(ms)":1,"exportVars":null,"time":"2026-09-22T20:00:37.382+0800","message":"run step end"}
+{"level":"info","testcase":"B 多步骤 + extract 参数关联","time":"2026-09-22T20:00:37.382+0800","message":"run testcase end"}
+{"level":"info","path":"results\\20260922200036","time":"2026-09-22T20:00:37.382+0800","message":"create folder"}
+{"level":"info","path":"C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-run\\results\\20260922200036\\summary.json","time":"2026-09-22T20:00:37.383+0800","message":"dump data to json"}

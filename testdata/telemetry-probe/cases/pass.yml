@@ -1,0 +1,14 @@
+# 路径①：用例通过（退出码 0）
+config:
+    name: "TEL-probe pass"
+    verify: false
+teststeps:
+-
+    name: "step1 ok"
+    request:
+        method: GET
+        url: $base_url/get
+        params:
+            a: "1"
+    validate:
+        - eq: ["status_code", 200]

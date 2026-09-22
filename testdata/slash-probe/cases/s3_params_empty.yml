@@ -1,0 +1,50 @@
+# A1 补充实测：证明「空 params」不能用来规避引擎补结尾斜杠
+#
+# 预期（实测 v4.3.6）：
+#   step1 params: {}     → 实际发出 GET /anything/abc/   ← 照样补
+#   step2 params: null   → 实际发出 GET /anything/abc/   ← 照样补
+#   step3 有查询串        → 实际发出 GET /anything/abc?k=v ← 不补
+#   step4 URL 自带 ?      → 实际发出 GET /anything/abc?inline=1 ← 不补
+#
+# 复现：
+#   cd testdata/slash-probe
+#   "$HRP" run cases/s3_params_empty.yml 2>/dev/null | grep -E '^(GET|POST) /'
+#
+# 结论：唯一的规避写法是「补一个真实存在的查询串」。
+# 平台侧对应 internal/validator 的 TRAILING_SLASH_ADDED（warning）。
+config:
+    name: "SLASH-probe3 params 空值不能规避补斜杠"
+    verify: false
+teststeps:
+-
+    name: "step1 bare path with empty params object"
+    request:
+        method: GET
+        url: $base_url/anything/abc
+        params: {}
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "step2 bare path with null params"
+    request:
+        method: GET
+        url: $base_url/anything/abc
+        params:
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "step3 bare path with real params"
+    request:
+        method: GET
+        url: $base_url/anything/abc
+        params:
+            k: v
+    validate:
+        - eq: ["status_code", 200]
+-
+    name: "step4 inline query string"
+    request:
+        method: GET
+        url: $base_url/anything/abc?inline=1
+    validate:
+        - eq: ["status_code", 200]

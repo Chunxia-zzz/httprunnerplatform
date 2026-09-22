@@ -1,0 +1,11 @@
+config:
+    name: "BATCH-1-pass"
+    verify: false
+teststeps:
+-
+    name: "ok"
+    request:
+        method: GET
+        url: $base_url/get
+    validate:
+        - eq: ["status_code", 200]

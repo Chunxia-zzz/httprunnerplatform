@@ -1,0 +1,15 @@
+config:
+    name: "PLUGIN-debugtalk"
+    verify: false
+teststeps:
+-
+    name: "call python function from debugtalk"
+    request:
+        method: GET
+        url: $base_url/get
+        params:
+            sum: ${add(1, 2)}
+            ts: ${stamp()}
+    validate:
+        - eq: ["status_code", 200]
+        - eq: ["body.args.sum", "3"]

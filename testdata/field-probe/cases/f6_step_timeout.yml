@@ -1,0 +1,12 @@
+config:
+    name: "FIELD-step-timeout"
+    verify: false
+teststeps:
+    -
+        name: "step level timeout"
+        timeout: 5
+        request:
+            method: GET
+            url: $base_url/get
+        validate:
+            - eq: ["status_code", 200]

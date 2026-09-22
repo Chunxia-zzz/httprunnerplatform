@@ -1,0 +1,59 @@
+{
+    "success": false,
+    "stat": {
+        "testcases": {
+            "total": 1,
+            "success": 0,
+            "fail": 1
+        },
+        "teststeps": {
+            "total": 1,
+            "successes": 0,
+            "failures": 1
+        }
+    },
+    "time": {
+        "start_at": "2026-09-22T20:01:02.9938865+08:00",
+        "duration": 1.3124793000000001
+    },
+    "platform": {
+        "httprunner_version": "v4.3.6",
+        "go_version": "go1.21.1",
+        "platform": "windows-amd64"
+    },
+    "details": [
+        {
+            "name": "TIMEOUT-request-level",
+            "success": false,
+            "stat": {
+                "total": 1,
+                "successes": 0,
+                "failures": 1
+            },
+            "time": {
+                "start_at": "2026-09-22T20:01:03.1214612+08:00",
+                "duration": 1.1849046
+            },
+            "in_out": {
+                "config_vars": {
+                    "base_url": "http://127.0.0.1:8899"
+                },
+                "export_vars": {
+                    
+                }
+            },
+            "records": [
+                {
+                    "name": "request timeout 1s against delay 6s",
+                    "start_time": 1790078463,
+                    "step_type": "request",
+                    "success": false,
+                    "elapsed_ms": 0,
+                    "content_size": 0,
+                    "attachments": "do request failed: Get \"http://127.0.0.1:8899/delay/6?x=1\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+                }
+            ],
+            "root_dir": ""
+        }
+    ]
+}

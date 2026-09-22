@@ -1,0 +1,12 @@
+config:
+    name: "FIELD-request-timeout"
+    verify: false
+teststeps:
+    -
+        name: "request level timeout"
+        request:
+            method: GET
+            url: $base_url/get
+            timeout: 5
+        validate:
+            - eq: ["status_code", 200]

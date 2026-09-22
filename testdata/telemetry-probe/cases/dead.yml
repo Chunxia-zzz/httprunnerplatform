@@ -1,0 +1,14 @@
+# 路径②：请求失败（端口不通，退出码 1）
+config:
+    name: "TEL-probe request failed"
+    verify: false
+teststeps:
+-
+    name: "step1 dead port"
+    request:
+        method: GET
+        url: http://127.0.0.1:9/get
+        params:
+            a: "1"
+    validate:
+        - eq: ["status_code", 200]

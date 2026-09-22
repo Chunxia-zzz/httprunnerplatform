@@ -30,3 +30,43 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# ---------------------------------------------------------------
+# httprunnerplatform 平台特有
+# ---------------------------------------------------------------
+
+# 平台运行期数据：用例工作区与执行产物，绝不入库
+/data/workspaces/
+/data/runtime/
+
+# 本地配置（只提交 configs/config.example.yaml）
+/configs/config.yaml
+
+# hrp 引擎二进制：体积大且平台外置管理，不入库
+# （*.exe 已在上方忽略，此处补充 Linux/macOS 无后缀二进制）
+/hrp
+/bin/hrp
+
+# 前端
+/web/node_modules/
+/web/dist/
+/web/.vite/
+*.tsbuildinfo
+
+# 实测/调试产物
+/stderr.log
+/stdout.log
+/tmp/
+
+# ---------------------------------------------------------------
+# 引擎探针工程（testdata/）
+# ---------------------------------------------------------------
+
+# 探针工程的 .env 是夹具本体（提供 base_url），必须入库
+# —— 覆盖上方全局的 `.env` 忽略规则
+!testdata/**/.env
+
+# hrp 在执行时写入项目根的运行期产物，一律不入库
+results/
+__pycache__/
+.debugtalk_gen.py

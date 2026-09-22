@@ -1,0 +1,25 @@
+{"level":"info","time":"2026-09-22T20:00:30.737+0800","message":"log with json output"}
+{"level":"info","log_level":"INFO","time":"2026-09-22T20:00:30.737+0800","message":"set global log level"}
+{"level":"info","failfast":true,"time":"2026-09-22T20:00:30.737+0800","message":"[init] SetFailfast"}
+{"level":"info","saveTests":true,"time":"2026-09-22T20:00:30.738+0800","message":"[init] SetSaveTests"}
+{"level":"info","timeout_seconds":3600,"time":"2026-09-22T20:00:30.738+0800","message":"[init] SetCaseTimeout"}
+{"level":"info","time":"2026-09-22T20:00:30.738+0800","message":"[init] SetRequestsLogOn"}
+{"level":"info","hrp_version":"v4.3.6","time":"2026-09-22T20:00:30.738+0800","message":"start running"}
+{"level":"info","path":"testcases\\a_pass.yml","time":"2026-09-22T20:00:30.738+0800","message":"load file"}
+{"level":"info","path":"C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-run\\.env","time":"2026-09-22T20:00:30.744+0800","message":"load file"}
+{"level":"info","key":"base_url","time":"2026-09-22T20:00:30.744+0800","message":"set env"}
+{"level":"info","count":1,"time":"2026-09-22T20:00:30.745+0800","message":"load testcases successfully"}
+{"level":"warn","path":"testcases\\a_pass.yml","time":"2026-09-22T20:00:30.75+0800","message":"locate plugin failed"}
+{"level":"info","time":"2026-09-22T20:00:30.75+0800","message":"reset session runner"}
+{"level":"info","testcase":"A 全部通过","time":"2026-09-22T20:00:31.361+0800","message":"run testcase start"}
+{"level":"info","step":"步骤1 GET /get 带 query 参数","type":"request-GET","time":"2026-09-22T20:00:31.361+0800","message":"run step start"}
+{"level":"info","checkExpr":"status_code","assertMethod":"eq","expectValue":200,"expectValueType":"int64","checkValue":200,"checkValueType":"int64","result":true,"time":"2026-09-22T20:00:31.362+0800","message":"validate status_code"}
+{"level":"info","checkExpr":"body.args.foo1","assertMethod":"eq","expectValue":"bar1","expectValueType":"string","checkValue":"bar1","checkValueType":"string","result":true,"time":"2026-09-22T20:00:31.362+0800","message":"validate body.args.foo1"}
+{"level":"info","step":"步骤1 GET /get 带 query 参数","type":"request-GET","success":true,"elapsed(ms)":1,"exportVars":null,"time":"2026-09-22T20:00:31.362+0800","message":"run step end"}
+{"level":"info","step":"步骤2 POST /post 带 JSON body","type":"request-POST","time":"2026-09-22T20:00:31.362+0800","message":"run step start"}
+{"level":"info","checkExpr":"status_code","assertMethod":"eq","expectValue":200,"expectValueType":"int64","checkValue":200,"checkValueType":"int64","result":true,"time":"2026-09-22T20:00:31.363+0800","message":"validate status_code"}
+{"level":"info","checkExpr":"body.json.name","assertMethod":"eq","expectValue":"tester","expectValueType":"string","checkValue":"tester","checkValueType":"string","result":true,"time":"2026-09-22T20:00:31.363+0800","message":"validate body.json.name"}
+{"level":"info","step":"步骤2 POST /post 带 JSON body","type":"request-POST","success":true,"elapsed(ms)":1,"exportVars":null,"time":"2026-09-22T20:00:31.363+0800","message":"run step end"}
+{"level":"info","testcase":"A 全部通过","time":"2026-09-22T20:00:31.363+0800","message":"run testcase end"}
+{"level":"info","path":"results\\20260922200030","time":"2026-09-22T20:00:31.363+0800","message":"create folder"}
+{"level":"info","path":"C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-run\\results\\20260922200030\\summary.json","time":"2026-09-22T20:00:31.367+0800","message":"dump data to json"}

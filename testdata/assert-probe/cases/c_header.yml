@@ -1,0 +1,11 @@
+config:
+    name: "ASSERT-missing-header"
+    verify: false
+teststeps:
+-
+    name: "header does not exist"
+    request:
+        method: GET
+        url: $base_url/get
+    validate:
+        - eq: ["headers.X-No-Such-Header", "x"]

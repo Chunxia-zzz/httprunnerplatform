@@ -1,0 +1,16 @@
+config:
+    name: "BODY-body-field"
+    verify: false
+teststeps:
+-
+    name: "using body field with explicit content-type"
+    request:
+        method: POST
+        url: $base_url/anything/b3
+        headers:
+            Content-Type: "application/json"
+        body:
+            name: tester
+            age: 18
+    validate:
+        - eq: ["status_code", 200]
