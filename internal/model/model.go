@@ -589,12 +589,29 @@ type AssertionResult struct {
 	Msg             string `gorm:"size:512;not null;default:''" json:"msg"`
 }
 
-// APIToken 是 CI 令牌（M2 启用）。
+// APIToken 是 CI 令牌。
+//
+// ⭐ 库里**只存哈希**，不存明文（设计文档决策 4）。
+// 明文在创建时返回一次，之后只能看到 Prefix。忘了就重签 ——
+// 对 CI 而言重签的成本远低于"明文长期躺在库里"。
 type APIToken struct {
 	Base
-	ProjectID  uint64     `gorm:"not null;default:0" json:"project_id"`
-	Name       string     `gorm:"size:64;not null" json:"name"`
-	Token      string     `gorm:"size:128;not null;uniqueIndex" json:"token"`
+	ProjectID uint64 `gorm:"not null;default:0" json:"project_id"`
+	Name      string `gorm:"size:64;not null" json:"name"`
+	// TokenHash 是 sha256(明文) 的 hex。
+	//
+	// ⚠️ 列名沿用 M1 留下的 `token`（用 column 显式绑定），
+	// 这样老库不需要删列就能升级：那列是 NOT NULL 且带唯一索引，
+	// 直接改成新列名会让老库插入失败（NOT NULL 约束），
+	// 而 SQLite 的 AutoMigrate 不会删列。语义由字段名说清楚就够了。
+	//
+	// 为什么是 sha256 而不是 bcrypt：bcrypt 的意义是抗暴力破解
+	// （密码有猜测空间，要故意算慢）。CI Token 是 32 字节随机数，
+	// 没有猜测空间 —— 用 bcrypt 只会让每次触发白付 100ms 的 KDF 开销。
+	TokenHash string `gorm:"column:token;size:128;not null;uniqueIndex" json:"-"`
+	// Prefix 是展示用前缀（如 hrp_ci_a1b2c3d4），用于在列表里认出是哪个令牌。
+	Prefix string `gorm:"size:32;not null;default:''" json:"prefix"`
+	// Scope 是逗号分隔的权限，如 "run:trigger,run:read"。
 	Scope      string     `gorm:"size:255;not null;default:''" json:"scope"`
 	ExpireAt   *time.Time `json:"expire_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`

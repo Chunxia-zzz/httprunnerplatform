@@ -79,7 +79,14 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerPlanRoutes(authed, deps)
 		registerRunRoutes(authed, deps)
 		registerUserRoutes(authed, deps)
+		registerTokenRoutes(authed, deps)
 	}
+
+	// ⭐ CI 入口单独一个前缀：不走会话体系，语义与限流都和页面上的人不同，
+	// 混在 /api/v1 里迟早要拆，不如一开始就分开。
+	open := r.Group("/open")
+	open.Use(middleware.RequireToken(deps.Services.Token.Verify))
+	registerOpenRoutes(open, deps)
 
 	return r
 }
@@ -174,6 +181,24 @@ func registerPlanRoutes(g *gin.RouterGroup, deps *Deps) {
 	g.PUT("/plans/:id/enabled", h.SetEnabled)
 	g.GET("/plans/:id/suites", h.Suites)
 	g.PUT("/plans/:id/suites", h.SetSuites)
+}
+
+// registerTokenRoutes 注册 CI 令牌管理路由（页面侧，需登录）。
+//
+// 与「使用令牌」（/open）是两回事：这里是签发与吊销，属于管理动作，
+// 必须走会话体系；那边是机器调用，只认令牌。
+func registerTokenRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newTokenHandler(deps)
+	g.GET("/projects/:id/tokens", h.List)
+	g.POST("/projects/:id/tokens", h.Issue)
+	g.DELETE("/tokens/:id", h.Revoke)
+}
+
+// registerOpenRoutes 注册 CI 触发入口（令牌鉴权）。
+func registerOpenRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newOpenHandler(deps)
+	g.POST("/runs", h.Trigger)
+	g.GET("/runs/:id/result", h.Result)
 }
 
 // registerRunRoutes 注册执行相关路由。

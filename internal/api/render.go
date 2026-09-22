@@ -124,6 +124,20 @@ func OKPage(c *gin.Context, list any, total int64, p Pagination) {
 // ParseIDParam 解析路径参数中的 uint64 ID。
 //
 // 校验失败时已写入响应，调用方直接 return 即可。
+// ParseQueryID 解析查询参数里的正整数 ID。
+//
+// 与 ParseIDParam 分开：查询参数缺失是常见情况，值得一条更明确的提示，
+// 而不是混在"路径参数非法"里。
+func ParseQueryID(c *gin.Context, name string) (uint64, bool) {
+	raw := c.Query(name)
+	id, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil || id == 0 {
+		Fail(c, response.CodeBadParam, "查询参数 "+name+" 非法且必填")
+		return 0, false
+	}
+	return id, true
+}
+
 func ParseIDParam(c *gin.Context, name string) (uint64, bool) {
 	raw := c.Param(name)
 	id, err := strconv.ParseUint(raw, 10, 64)

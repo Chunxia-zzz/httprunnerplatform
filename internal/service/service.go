@@ -43,6 +43,7 @@ type Set struct {
 	Case        *CaseService
 	Suite       *SuiteService
 	Plan        *PlanService
+	Token       *TokenService
 	Run         *RunService
 	User        *UserService
 }
@@ -55,6 +56,7 @@ func New(d Deps) *Set {
 		Case:        &CaseService{Deps: d},
 		Suite:       &SuiteService{Deps: d},
 		Plan:        &PlanService{Deps: d},
+		Token:       &TokenService{Deps: d},
 		Run:         NewRunService(d),
 		User:        &UserService{Deps: d},
 	}

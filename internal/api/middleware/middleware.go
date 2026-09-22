@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/auth"
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/logx"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/response"
 )
@@ -130,4 +131,73 @@ func CurrentPrincipal(c *gin.Context) (auth.Principal, bool) {
 	}
 	p, ok := v.(auth.Principal)
 	return p, ok
+}
+
+// ---------------------------------------------------------------------------
+// CI 令牌鉴权（/open 前缀）
+// ---------------------------------------------------------------------------
+
+// TokenKey 是 gin.Context 中存放 CI 令牌记录的键。
+const TokenKey = "hrp_ci_token"
+
+// RequireToken 校验 CI 令牌。
+//
+// 与会话鉴权**完全分开**，两个理由：
+//   - 语义不同：CI 触发没有"登录态"，也不该有过期续期那一套；
+//   - 限流不同：以后给 /open 单独限流时，不会误伤页面上的人。
+//
+// 令牌有两种携带方式：`Authorization: Bearer <token>` 是标准做法，
+// `X-HRP-Token` 留给不方便设 Authorization 头的场景（部分 CI 的
+// HTTP 步骤会把 Authorization 拿去做别的事）。
+func RequireToken(verify func(raw string) (*model.APIToken, error)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		raw := bearerToken(c)
+		if raw == "" {
+			raw = strings.TrimSpace(c.GetHeader("X-HRP-Token"))
+		}
+		tk, err := verify(raw)
+		if err != nil {
+			// 这里不区分"令牌不存在"与"令牌过期"以外的内部错误细节：
+			// 令牌是凭据，回显太多信息等于帮人枚举。
+			code := response.CodeUnauthorized
+			if re, ok := err.(*response.Error); ok {
+				code = re.Code
+			}
+			abortJSON(c, http.StatusUnauthorized, code, errText(err))
+			return
+		}
+		c.Set(TokenKey, tk)
+		c.Next()
+	}
+}
+
+// bearerToken 从 Authorization 头里取出令牌。
+func bearerToken(c *gin.Context) string {
+	h := strings.TrimSpace(c.GetHeader("Authorization"))
+	if h == "" {
+		return ""
+	}
+	parts := strings.Fields(h)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return ""
+	}
+	return strings.TrimSpace(parts[1])
+}
+
+// errText 取出对外可说的错误文案。
+func errText(err error) string {
+	if re, ok := err.(*response.Error); ok {
+		return re.Message
+	}
+	return "令牌无效"
+}
+
+// CurrentToken 取出当前请求绑定的 CI 令牌。
+func CurrentToken(c *gin.Context) (*model.APIToken, bool) {
+	v, ok := c.Get(TokenKey)
+	if !ok {
+		return nil, false
+	}
+	tk, ok := v.(*model.APIToken)
+	return tk, ok
 }

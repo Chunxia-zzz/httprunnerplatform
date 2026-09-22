@@ -30,6 +30,9 @@ type testEnv struct {
 	store *auth.Store
 	db    *gorm.DB
 	users *service.UserService
+	// svcs 让各测试能直接拿到 service 层（例如签 CI 令牌），
+	// 不必为了造前置数据再走一遍 HTTP。
+	svcs *service.Set
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -59,6 +62,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		store: store,
 		db:    db,
 		users: svcs.User,
+		svcs:  svcs,
 	}
 }
 
