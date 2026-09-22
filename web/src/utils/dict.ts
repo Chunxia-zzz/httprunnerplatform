@@ -85,7 +85,6 @@ export function caseStatusMeta(s: string): { label: string; type: TagType } {
 
 /** hrp 支持的请求方法（M1 只开放 request 步骤）。 */
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
-
 export const STEP_TYPE_META: Record<string, string> = {
   request: '请求',
   api: '引用接口',
@@ -98,4 +97,17 @@ export const STEP_TYPE_META: Record<string, string> = {
 
 export function stepTypeLabel(t: string): string {
   return STEP_TYPE_META[t] ?? t
+}
+
+/**
+ * 账号角色。只有两档（不引入 RBAC），标签刻意用平实词汇：
+ * 「管理员」能管账号、能删项目；「成员」其余功能都能用。
+ */
+export const ROLE_META: Record<string, { label: string; type: TagType; desc: string }> = {
+  admin: { label: '管理员', type: 'danger', desc: '可管理账号、可删除项目' },
+  member: { label: '成员', type: 'info', desc: '可用全部用例功能；不能管理账号、不能删除项目' },
+}
+
+export function roleMeta(role: string): { label: string; type: TagType; desc: string } {
+  return ROLE_META[role] ?? { label: role || '未知', type: 'info', desc: '' }
 }

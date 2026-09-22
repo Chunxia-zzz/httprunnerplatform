@@ -68,15 +68,32 @@ func NewRouter(deps *Deps) *gin.Engine {
 	{
 		authed.GET("/auth/me", newAuthHandler(deps).Me)
 		authed.POST("/auth/logout", newAuthHandler(deps).Logout)
+		// 本人改密码：只要求登录，不需要管理员（要验原密码）
+		authed.POST("/auth/password", newAuthHandler(deps).ChangePassword)
 		authed.GET("/engine/status", engineStatus(deps))
 
 		registerProjectRoutes(authed, deps)
 		registerEnvironmentRoutes(authed, deps)
 		registerCaseRoutes(authed, deps)
 		registerRunRoutes(authed, deps)
+		registerUserRoutes(authed, deps)
 	}
 
 	return r
+}
+
+// registerUserRoutes 注册账号管理路由。
+//
+// 整个分组都挂 RequireAdmin：账号管理是平台里唯一一类
+// "普通成员完全不该碰"的能力（方案 10.2：只 admin / member 两档，不做 RBAC）。
+func registerUserRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newUserHandler(deps)
+	admins := g.Group("/users", middleware.RequireAdmin())
+	admins.GET("", h.List)
+	admins.POST("", h.Create)
+	admins.PUT("/:id", h.Update)
+	admins.DELETE("/:id", h.Delete)
+	admins.POST("/:id/password", h.ResetPassword)
 }
 
 // registerProjectRoutes 注册项目相关路由。
@@ -86,7 +103,10 @@ func registerProjectRoutes(g *gin.RouterGroup, deps *Deps) {
 	g.POST("/projects", h.Create)
 	g.GET("/projects/:id", h.Get)
 	g.PUT("/projects/:id", h.Update)
-	g.DELETE("/projects/:id", h.Delete)
+	// 删除项目是平台里破坏性最大的操作：会连带删掉项目下的环境与用例，
+	// 并让已产生的执行记录失去归属。因此收紧为管理员专属
+	// （与账号管理同一档；其余用例级操作成员可正常使用）。
+	g.DELETE("/projects/:id", middleware.RequireAdmin(), h.Delete)
 }
 
 // registerEnvironmentRoutes 注册环境相关路由。

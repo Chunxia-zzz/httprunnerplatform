@@ -263,7 +263,11 @@ func newServerCmd(g *globalFlags) *cobra.Command {
 			// services 由这里持有而不是交给 NewRouter 内部构造：
 			// 运行服务维护着在跑执行的取消句柄，进程退出时必须由**同一个实例**
 			// 负责把 hrp 子进程收干净（实测 A6：被强杀的 hrp 会留下挂起的子进程）。
-			svcs := service.New(service.Deps{DB: db, Cfg: cfg})
+			//
+			// Sessions 必须传同一个实例：用户管理要吊销会话
+			// （禁用/降级/重置密码），而中间件校验的是这份表。
+			// 传错实例的结果是"吊销成功了但没吊销到真正在用的会话"。
+			svcs := service.New(service.Deps{DB: db, Cfg: cfg, Sessions: sessions})
 			router := api.NewRouter(&api.Deps{
 				Cfg:      cfg,
 				DB:       db,

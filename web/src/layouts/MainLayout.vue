@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import EngineStatusBanner from '@/components/EngineStatusBanner.vue'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useEngineStore } from '@/stores/engine'
 import { useProjectStore } from '@/stores/project'
@@ -14,13 +15,21 @@ const auth = useAuthStore()
 const engine = useEngineStore()
 const projects = useProjectStore()
 
-/** 侧边栏导航。用例是主战场，放第一个。 */
-const navItems = [
-  { name: 'cases', label: '用例管理', icon: 'Document' },
-  { name: 'runs', label: '执行记录', icon: 'VideoPlay' },
-  { name: 'environments', label: '环境管理', icon: 'Setting' },
-  { name: 'projects', label: '项目管理', icon: 'Folder' },
+/**
+ * 侧边栏导航。用例是主战场，放第一个。
+ *
+ * 「账号管理」按角色显隐：普通成员看不到 —— 后端 /users 全组挂了
+ * RequireAdmin，给他们显示一个点了必然 403 的菜单项没有意义。
+ */
+const ALL_NAV = [
+  { name: 'cases', label: '用例管理', icon: 'Document', admin: false },
+  { name: 'runs', label: '执行记录', icon: 'VideoPlay', admin: false },
+  { name: 'environments', label: '环境管理', icon: 'Setting', admin: false },
+  { name: 'projects', label: '项目管理', icon: 'Folder', admin: false },
+  { name: 'users', label: '账号管理', icon: 'UserFilled', admin: true },
 ]
+
+const navItems = computed(() => ALL_NAV.filter((i) => !i.admin || auth.isAdmin))
 
 const activeNav = computed(() => {
   const n = route.name as string | undefined
@@ -57,6 +66,25 @@ async function onLogout() {
   await auth.logout()
   ElMessage.success('已退出登录')
   void router.push({ name: 'login' })
+}
+
+const changePwVisible = ref(false)
+
+/**
+ * 顶栏用户菜单。
+ *
+ * 用 switch 而不是链式三元：命令变多时三元会退化成一串难以阅读的表达式，
+ * 而且漏掉一个命令是静默的（点了没反应）。
+ */
+function onUserCommand(cmd: string) {
+  switch (cmd) {
+    case 'password':
+      changePwVisible.value = true
+      break
+    case 'logout':
+      void onLogout()
+      break
+  }
 }
 </script>
 
@@ -104,7 +132,7 @@ async function onLogout() {
             </el-tag>
           </el-tooltip>
 
-          <el-dropdown @command="(c: string) => c === 'logout' && onLogout()">
+          <el-dropdown @command="onUserCommand">
             <span class="layout__user">
               <el-icon><User /></el-icon>
               {{ auth.displayName }}
@@ -113,7 +141,12 @@ async function onLogout() {
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                <el-dropdown-item command="password">
+                  <el-icon><Key /></el-icon>修改密码
+                </el-dropdown-item>
+                <el-dropdown-item command="logout" divided>
+                  <el-icon><SwitchButton /></el-icon>退出登录
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -125,6 +158,8 @@ async function onLogout() {
         <router-view />
       </el-main>
     </el-container>
+
+    <ChangePasswordDialog v-model="changePwVisible" />
   </el-container>
 </template>
 

@@ -84,6 +84,78 @@ func (s *Store) Delete(token string) {
 	s.mu.Unlock()
 }
 
+// Revoke 吊销某个用户的全部会话，返回吊销数量。
+//
+// ⚠️ 这不是可选项。会话表缓存了 Principal（含 Role），中间件信任这份缓存，
+// 因此"禁用/降级一个用户"若只改了数据库，**他的会话在 TTL 内仍然有效**：
+// 被降级的管理员会继续拥有管理员权限，被禁用的账号还能继续操作。
+// 凡是改变用户身份或权限的动作（禁用、改角色、重置密码、删除），
+// 都必须调用它，否则改动等于没生效。
+func (s *Store) Revoke(userID uint64) int {
+	return s.revoke(userID, "")
+}
+
+// RevokeExcept 吊销某用户除 keepToken 之外的全部会话。
+//
+// 用于"本人修改密码"：安全上要求把其它设备上的登录踢掉，
+// 但正在操作的这一次不该被踢——否则用户改完密码立刻被登出，
+// 只会让人以为改密码把账号弄坏了。
+func (s *Store) RevokeExcept(userID uint64, keepToken string) int {
+	return s.revoke(userID, keepToken)
+}
+
+func (s *Store) revoke(userID uint64, keepToken string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for k, v := range s.m {
+		if v.principal.UserID != userID {
+			continue
+		}
+		if keepToken != "" && k == keepToken {
+			continue
+		}
+		delete(s.m, k)
+		n++
+	}
+	return n
+}
+
+// RefreshPrincipal 就地更新某用户所有会话里的主体信息，返回更新数量。
+//
+// 只适用于**不改变权限**的字段（昵称、用户名）。改角色或启用状态请用 Revoke：
+// 那类变更必须让用户重新登录，否则中间件读到的仍是旧的构造时快照。
+func (s *Store) RefreshPrincipal(userID uint64, fn func(Principal) Principal) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for k, v := range s.m {
+		if v.principal.UserID != userID {
+			continue
+		}
+		v.principal = fn(v.principal)
+		s.m[k] = v
+		n++
+	}
+	return n
+}
+
+// SessionsOf 返回某用户当前的有效会话数。
+//
+// 用途：管理员页面上显示"该账号有几个在线会话"，
+// 以及在单测里断言吊销真的发生了（而不是只看返回值）。
+func (s *Store) SessionsOf(userID uint64) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n := 0
+	for _, v := range s.m {
+		if v.principal.UserID == userID {
+			n++
+		}
+	}
+	return n
+}
+
 // TTL 返回会话有效期。
 func (s *Store) TTL() time.Duration { return s.ttl }
 

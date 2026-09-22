@@ -18,6 +18,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/auth"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/config"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/response"
@@ -27,6 +28,12 @@ import (
 type Deps struct {
 	DB  *gorm.DB
 	Cfg *config.Config
+	// Sessions 是登录态表。用户管理需要它来"吊销会话"——
+	// 禁用/降级/重置密码若不连带吊销，改动在 TTL 内等于没生效（见 auth.Store.Revoke）。
+	//
+	// 刻意**不做 nil 兜底**：若忘了接线，静默换成一个空表只会让吊销"看起来成功了
+	// 但实际没吊销真实会话"，那比直接报错难查得多。见 UserService.revokeSessions。
+	Sessions *auth.Store
 }
 
 // Set 汇总全部 service，供上层一次性注入与优雅关闭。
@@ -35,6 +42,7 @@ type Set struct {
 	Environment *EnvironmentService
 	Case        *CaseService
 	Run         *RunService
+	User        *UserService
 }
 
 // New 构造全部 service。
@@ -44,6 +52,7 @@ func New(d Deps) *Set {
 		Environment: &EnvironmentService{Deps: d},
 		Case:        &CaseService{Deps: d},
 		Run:         NewRunService(d),
+		User:        &UserService{Deps: d},
 	}
 }
 
@@ -130,6 +139,15 @@ func errNotFound(format string, args ...any) *response.Error {
 
 func errInUse(format string, args ...any) *response.Error {
 	return response.Newf(response.CodeInUse, format, args...)
+}
+
+// errForbidden 用于"操作本身合法，但当前状态不允许这么做"。
+//
+// 典型场景是用户管理里的自我保护：管理员不能把自己降级/禁用，
+// 也不能干掉最后一个可用管理员。这类拒绝不是参数错（40000），
+// 也不是"资源被占用"（40003），而是权限与状态约束。
+func errForbidden(format string, args ...any) *response.Error {
+	return response.Newf(response.CodeForbidden, format, args...)
 }
 
 func errInvalidIdent(field, value string) *response.Error {

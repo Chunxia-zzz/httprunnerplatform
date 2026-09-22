@@ -6,6 +6,7 @@ export * as environmentApi from './environment'
 export * as caseApi from './case'
 export * as runApi from './run'
 export * as engineApi from './engine'
+export * as userApi from './user'
 
 // ---------------------------------------------------------------------------
 // 逐个透出子模块里的**具名导出**。

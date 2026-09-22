@@ -11,6 +11,7 @@ import (
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/api/middleware"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/auth"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/service"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/logx"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/response"
 )
@@ -18,10 +19,11 @@ import (
 type authHandler struct {
 	db       *gorm.DB
 	sessions *auth.Store
+	users    *service.UserService
 }
 
 func newAuthHandler(deps *Deps) *authHandler {
-	return &authHandler{db: deps.DB, sessions: deps.Sessions}
+	return &authHandler{db: deps.DB, sessions: deps.Sessions, users: deps.Services.User}
 }
 
 type loginReq struct {
@@ -87,5 +89,27 @@ func (h *authHandler) Logout(c *gin.Context) {
 	}
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(auth.CookieName, "", -1, "/", "", false, true)
+	OK(c, nil)
+}
+
+// ChangePassword 本人修改密码。需要验证原密码。
+//
+// 把当前会话 ID 一并传给 service：改完密码要踢掉**其它**设备上的登录，
+// 但不能踢掉正在操作的这一次。这个判断必须在 service 里做，
+// 否则"改密码要不要下线"这条规则会散落在 HTTP 层，难以单测。
+func (h *authHandler) ChangePassword(c *gin.Context) {
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, response.CodeBadParam, "请求体非法："+err.Error())
+		return
+	}
+	token, _ := c.Cookie(auth.CookieName)
+	if err := h.users.ChangeOwnPassword(currentUserID(c), token, req.OldPassword, req.NewPassword); err != nil {
+		WriteError(c, err)
+		return
+	}
 	OK(c, nil)
 }

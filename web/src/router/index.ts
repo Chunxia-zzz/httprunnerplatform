@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 import { useAuthStore } from '@/stores/auth'
 
@@ -58,6 +59,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/RunDetailView.vue'),
         meta: { title: '执行详情' },
       },
+      {
+        // 账号管理：后端所有 /users 端点都挂了 RequireAdmin，
+        // 这里加 meta.admin 只为把入口藏起来并给出可读提示 ——
+        // 直接输 URL 时兜住，而不是让用户看到一屏 40300。
+        path: 'users',
+        name: 'users',
+        component: () => import('@/views/UserListView.vue'),
+        meta: { title: '账号管理', admin: true },
+      },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: { name: 'cases' } },
@@ -85,6 +95,12 @@ router.beforeEach(async (to) => {
   }
   if (!auth.isLoggedIn) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  // 管理员专属页面。这里只是"不给出点不动的入口"，
+  // 真实判定始终在后端的 RequireAdmin 上 —— 前端隐藏永远不是权限控制。
+  if (to.meta.admin && !auth.isAdmin) {
+    ElMessage.warning('该页面仅管理员可访问')
+    return { name: 'cases' }
   }
   return true
 })

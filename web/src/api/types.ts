@@ -48,6 +48,78 @@ export interface Principal {
 }
 
 // ---------------------------------------------------------------------------
+// 用户与账号
+// ---------------------------------------------------------------------------
+
+/** 角色只有两档（方案 10.2：只做 admin / member，不引入 RBAC）。 */
+export type Role = 'admin' | 'member'
+
+export const ROLES: Role[] = ['admin', 'member']
+
+/**
+ * 账号列表项。
+ *
+ * `online_sessions` 不是装饰字段：管理员禁用某人后，这个数字归零才是
+ * 「会话吊销真的发生了」的可见证据 —— 否则只能靠猜。
+ */
+export interface User {
+  id: ID
+  username: string
+  nickname: string
+  role: Role | string
+  enabled: boolean
+  online_sessions: number
+  created_at: string
+}
+
+/** 新建账号。`enabled` 不传 = 默认启用（后端用指针接收）。 */
+export interface CreateUserReq {
+  username: string
+  password: string
+  nickname?: string
+  role?: Role | string
+  enabled?: boolean
+}
+
+/**
+ * 修改账号。
+ *
+ * ⚠️ 刻意**没有** `username` 字段：用户名是登录标识，且会写进
+ * `run_record.trigger_by` 关联的历史，允许改名等于让历史记录悄悄换人。
+ * 要换名字就新建账号、停用旧账号。后端也据此拒绝了该字段。
+ */
+export interface UpdateUserReq {
+  nickname?: string
+  role?: Role | string
+  enabled?: boolean
+}
+
+/** 本人修改密码（需验旧密码）。 */
+export interface ChangePasswordReq {
+  old_password: string
+  new_password: string
+}
+
+/** 管理员重置他人密码（无需旧密码）。 */
+export interface ResetPasswordReq {
+  password: string
+}
+
+export interface UserListQuery extends PageQuery {
+  keyword?: string
+  role?: string
+}
+
+/**
+ * 密码格式上限（与 internal/service/user.go 的常量对齐）。
+ *
+ * ⚠️ bcrypt **静默截断**超过 72 字节的输入，后端因此硬拦；
+ * 前端一并拦下，免得用户设了 100 位密码却只有前 72 字节生效。
+ */
+export const MIN_PASSWORD_LEN = 8
+export const MAX_PASSWORD_BYTES = 72
+
+// ---------------------------------------------------------------------------
 // 项目
 // ---------------------------------------------------------------------------
 

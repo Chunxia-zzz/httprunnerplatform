@@ -11,12 +11,14 @@ import { useRouter } from 'vue-router'
 import { ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 
 import { projectApi, type Project, type ProjectReq } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { useProjectStore } from '@/stores/project'
 import { formatTime } from '@/utils/format'
 import { notifyError, notifyOk } from '@/utils/error'
 
 const router = useRouter()
 const projects = useProjectStore()
+const auth = useAuthStore()
 
 const keyword = ref('')
 const loading = ref(false)
@@ -206,7 +208,19 @@ onMounted(load)
           <template #default="{ row }">
             <el-button link type="primary" @click="enter(row)">进入</el-button>
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" @click="remove(row)">删除</el-button>
+            <!--
+              删除项目会连带环境与用例，破坏性最大，后端已收紧为管理员专属。
+              非管理员这里直接给出不可点的按钮 + 原因，而不是让他点下去收 40300。
+            -->
+            <el-tooltip
+              :disabled="auth.isAdmin"
+              content="删除项目会连带其环境与用例，仅管理员可操作"
+              placement="top"
+            >
+              <span>
+                <el-button link type="danger" :disabled="!auth.isAdmin" @click="remove(row)">删除</el-button>
+              </span>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
