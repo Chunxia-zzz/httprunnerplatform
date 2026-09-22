@@ -111,3 +111,61 @@ export const ROLE_META: Record<string, { label: string; type: TagType; desc: str
 export function roleMeta(role: string): { label: string; type: TagType; desc: string } {
   return ROLE_META[role] ?? { label: role || '未知', type: 'info', desc: '' }
 }
+
+// ---------------------------------------------------------------------------
+// 编排层（M2）：执行模式、遇错行为、触发方式
+// ---------------------------------------------------------------------------
+
+export const EXECUTE_MODE_META: Record<string, { label: string; type: TagType; desc: string }> = {
+  sequential: { label: '串行', type: 'info', desc: '按顺序逐条执行，一个用例一个子进程' },
+  parallel: { label: '并行', type: 'warning', desc: '尚未实现，保存时会被拒绝' },
+}
+
+export function executeModeMeta(m: string): { label: string; type: TagType; desc: string } {
+  return EXECUTE_MODE_META[m] ?? { label: m || '串行', type: 'info', desc: '' }
+}
+
+export const ON_FAILURE_META: Record<string, { label: string; type: TagType; desc: string }> = {
+  continue: { label: '继续执行', type: 'success', desc: '一条失败不影响后面，一次能看到全部失败' },
+  abort: { label: '立即停止', type: 'warning', desc: '第一条失败后不再执行后面的用例' },
+}
+
+export function onFailureMeta(v: string): { label: string; type: TagType; desc: string } {
+  return ON_FAILURE_META[v] ?? { label: v || '继续执行', type: 'info', desc: '' }
+}
+
+export const TRIGGER_TYPE_META: Record<string, { label: string; type: TagType; desc: string }> = {
+  manual: { label: '手动', type: 'info', desc: '在页面上点「执行」才会跑' },
+  cron: { label: '定时', type: 'primary', desc: '按 cron 表达式自动触发' },
+  ci: { label: 'CI', type: 'success', desc: '由 CI 令牌触发（记录值，不能在计划里选）' },
+}
+
+export function triggerTypeMeta(t: string): { label: string; type: TagType; desc: string } {
+  return TRIGGER_TYPE_META[t] ?? { label: t || '手动', type: 'info', desc: '' }
+}
+
+/**
+ * 常用时区。给一个下拉而不是让用户手打 IANA 名 ——
+ * `Asia/Shanghai` 这类名字打错一个字母就会保存失败，
+ * 而"打错了"和"不合法"对用户是同一件事。
+ */
+export const COMMON_TIMEZONES = [
+  { value: 'Asia/Shanghai', label: '中国标准时间 (UTC+8)' },
+  { value: 'Asia/Tokyo', label: '日本标准时间 (UTC+9)' },
+  { value: 'Asia/Singapore', label: '新加坡时间 (UTC+8)' },
+  { value: 'Europe/London', label: '英国时间 (UTC+0/+1)' },
+  { value: 'America/New_York', label: '美国东部时间 (UTC-5/-4)' },
+  { value: 'America/Los_Angeles', label: '美国太平洋时间 (UTC-8/-7)' },
+  { value: 'UTC', label: 'UTC' },
+]
+
+/** cron 常用示例，供"不会写 cron"的人直接挑一个。 */
+export const CRON_PRESETS = [
+  { label: '每分钟', value: '* * * * *' },
+  { label: '每小时整点', value: '0 * * * *' },
+  { label: '每天 09:00', value: '0 9 * * *' },
+  { label: '每天 02:00', value: '0 2 * * *' },
+  { label: '工作日 09:00', value: '0 9 * * 1-5' },
+  { label: '每周一 09:00', value: '0 9 * * 1' },
+  { label: '每 15 分钟', value: '*/15 * * * *' },
+]

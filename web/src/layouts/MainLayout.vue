@@ -23,7 +23,10 @@ const projects = useProjectStore()
  */
 const ALL_NAV = [
   { name: 'cases', label: '用例管理', icon: 'Document', admin: false },
+  { name: 'suites', label: '用例集', icon: 'Files', admin: false },
+  { name: 'plans', label: '测试计划', icon: 'Timer', admin: false },
   { name: 'runs', label: '执行记录', icon: 'VideoPlay', admin: false },
+  { name: 'tokens', label: 'CI 令牌', icon: 'Key', admin: false },
   { name: 'environments', label: '环境管理', icon: 'Setting', admin: false },
   { name: 'projects', label: '项目管理', icon: 'Folder', admin: false },
   { name: 'users', label: '账号管理', icon: 'UserFilled', admin: true },

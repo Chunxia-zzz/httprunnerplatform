@@ -48,6 +48,26 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '编辑用例' },
       },
       {
+        // ⭐ 编排层三个页面按「用例 → 用例集 → 计划」的顺序排，
+        // 与执行时的组合顺序一致：计划挂用例集、用例集挂用例。
+        path: 'suites',
+        name: 'suites',
+        component: () => import('@/views/SuiteListView.vue'),
+        meta: { title: '用例集' },
+      },
+      {
+        path: 'plans',
+        name: 'plans',
+        component: () => import('@/views/PlanListView.vue'),
+        meta: { title: '测试计划' },
+      },
+      {
+        path: 'tokens',
+        name: 'tokens',
+        component: () => import('@/views/TokenListView.vue'),
+        meta: { title: 'CI 令牌' },
+      },
+      {
         path: 'runs',
         name: 'runs',
         component: () => import('@/views/RunListView.vue'),

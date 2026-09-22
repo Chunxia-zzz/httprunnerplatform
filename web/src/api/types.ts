@@ -558,3 +558,171 @@ export interface EngineStatus {
   note?: string
   error?: string
 }
+
+// ---------------------------------------------------------------------------
+// 用例集（M2 · 编排层）
+// ---------------------------------------------------------------------------
+
+/** 执行模式。`parallel` 后端明确拒绝（M2 只实现 sequential）。 */
+export type ExecuteMode = 'sequential' | 'parallel'
+
+/** 遇错行为。默认 `continue`：一次就能看到全部失败，不用"修一个跑一次"。 */
+export type OnFailure = 'abort' | 'continue'
+
+export interface Suite {
+  id: ID
+  project_id: ID
+  code: string
+  name: string
+  description: string
+  execute_mode: ExecuteMode
+  on_failure: OnFailure
+  timeout: number
+  /** 成员数。列表接口带出来，省一次请求。 */
+  case_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SuiteReq {
+  /** 仅创建时可填；更新接口刻意没有这个字段（code 会进入执行历史） */
+  code?: string
+  name: string
+  description?: string
+  execute_mode?: ExecuteMode
+  on_failure?: OnFailure
+  timeout?: number
+}
+
+/** 成员视图。`runnable=false` 时看 `skip_reason` 就知道为什么跑不了。 */
+export interface SuiteMember {
+  seq: number
+  case_id: ID
+  case_code: string
+  case_name: string
+  module: string
+  priority: string
+  status: string
+  runnable: boolean
+  skip_reason: string
+}
+
+// ---------------------------------------------------------------------------
+// 测试计划（M2 · 编排层）
+// ---------------------------------------------------------------------------
+
+/** 触发方式。`ci` 是记录值，用户不能在计划里选它。 */
+export type TriggerType = 'manual' | 'cron' | 'ci'
+
+export interface Plan {
+  id: ID
+  project_id: ID
+  name: string
+  description: string
+  env_id: ID
+  env_name?: string
+  trigger_type: TriggerType
+  cron_expr: string
+  /** cron 的中文说明，例如「每天 09:00」 */
+  cron_human: string
+  /** ⭐ IANA 时区名。只有配上时区，"几点跑"才有意义。 */
+  timezone: string
+  /** 下次执行时间（计划时区下的本地时间），手动计划为 null */
+  next_fire_at: string | null
+  enabled: boolean
+  timeout: number
+  suite_count: number
+  // --- 运行态：让"跳过"与"错过"可见 ---
+  last_run_id: ID
+  last_fired_at: string | null
+  last_missed_at: string | null
+  last_skip_reason: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PlanReq {
+  name: string
+  description?: string
+  env_id?: ID
+  trigger_type?: TriggerType
+  cron_expr?: string
+  timezone?: string
+  timeout?: number
+  /** 用指针语义：`false` 是合法值，不能跟"没传"混在一起 */
+  enabled?: boolean
+  /** 仅创建时可带：一次挂好成员 */
+  suite_ids?: ID[]
+}
+
+export interface PlanSuite {
+  seq: number
+  suite_id: ID
+  suite_code: string
+  suite_name: string
+  case_count: number
+  runnable: boolean
+  skip_reason: string
+}
+
+// ---------------------------------------------------------------------------
+// CI 令牌（M2 · 编排层）
+// ---------------------------------------------------------------------------
+
+export interface Token {
+  id: ID
+  project_id: ID
+  name: string
+  /** 展示用前缀，如 `hrp_ci_a1b2c3d4` */
+  prefix: string
+  scope: string
+  expire_at: string | null
+  last_used_at: string | null
+  created_at: string
+  expired: boolean
+}
+
+export interface TokenReq {
+  name: string
+  /** 留空则给默认权限：run:trigger,run:read */
+  scope?: string
+  /** 有效天数，0 表示不过期 */
+  ttl_days?: number
+}
+
+/** 签发结果。⭐ `token` 明文只在这里出现一次。 */
+export interface IssuedToken extends Token {
+  token: string
+}
+
+// ---------------------------------------------------------------------------
+// CI 结果（/open/runs/{id}/result）
+// ---------------------------------------------------------------------------
+
+/** ⭐ pipeline 直接用的退出码：0 成功 / 1 有用例没过 / 2 没跑完 */
+export type ExitCodeForCI = 0 | 1 | 2
+
+export interface OpenRunResult {
+  run_id: ID
+  /** 这次结果是"等到终态"拿到的，还是"看一眼就返回"的 */
+  wait: boolean
+  status: RunStatus | string
+  exit_code_for_ci: ExitCodeForCI
+  total: number
+  passed: number
+  failed: number
+  error: number
+  skipped: number
+  count_mismatch: boolean
+  duration_ms: number
+  error_msg: string
+  failed_cases?: { case_code: string; status: string; attribution: string; error_msg: string }[]
+}
+
+export interface OpenTriggerResp {
+  run_id: ID
+  status: RunStatus | string
+  wait: boolean
+  /** 异步触发时给出的轮询地址（/open/runs/{id}/result） */
+  poll_at?: string
+}
