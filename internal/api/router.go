@@ -76,6 +76,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerEnvironmentRoutes(authed, deps)
 		registerCaseRoutes(authed, deps)
 		registerSuiteRoutes(authed, deps)
+		registerPlanRoutes(authed, deps)
 		registerRunRoutes(authed, deps)
 		registerUserRoutes(authed, deps)
 	}
@@ -156,6 +157,23 @@ func registerSuiteRoutes(g *gin.RouterGroup, deps *Deps) {
 	g.DELETE("/suites/:id", h.Delete)
 	g.GET("/suites/:id/cases", h.Members)
 	g.PUT("/suites/:id/cases", h.SetMembers)
+}
+
+// registerPlanRoutes 注册测试计划相关路由。
+//
+// 计划同时具备两件事：一组用例集 + 什么时候跑。因此除了常规 CRUD，
+// 还有两个子资源：/plans/{id}/suites（成员）与 /plans/{id}/enabled（开关）。
+func registerPlanRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newPlanHandler(deps)
+	g.GET("/projects/:id/plans", h.List)
+	g.POST("/projects/:id/plans", h.Create)
+
+	g.GET("/plans/:id", h.Get)
+	g.PUT("/plans/:id", h.Update)
+	g.DELETE("/plans/:id", h.Delete)
+	g.PUT("/plans/:id/enabled", h.SetEnabled)
+	g.GET("/plans/:id/suites", h.Suites)
+	g.PUT("/plans/:id/suites", h.SetSuites)
 }
 
 // registerRunRoutes 注册执行相关路由。

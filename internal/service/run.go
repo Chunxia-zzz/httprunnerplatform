@@ -78,11 +78,18 @@ type RunOptions struct {
 
 // StartRunRequest 是启动执行的请求。
 type StartRunRequest struct {
-	ProjectID  uint64     `json:"project_id"`
-	TargetType string     `json:"target_type"`
-	TargetID   uint64     `json:"target_id"`
-	EnvID      uint64     `json:"env_id"`
-	Options    RunOptions `json:"options"`
+	ProjectID  uint64 `json:"project_id"`
+	TargetType string `json:"target_type"`
+	TargetID   uint64 `json:"target_id"`
+	EnvID      uint64 `json:"env_id"`
+	// TriggerType 由调起方决定：手动触发留空（回落 manual），
+	// 定时计划传 cron，CI 触发传 ci。它是"这次执行是谁发起的"的唯一记录，
+	// 不能靠猜 —— 事后查"这条到底是不是定时任务跑的"全靠它。
+	TriggerType string `json:"-"`
+	// PlanID 只在由测试计划触发时非零。一次计划触发会为每个用例集
+	// 各起一条执行记录，这是那批记录的关联键。
+	PlanID  uint64     `json:"-"`
+	Options RunOptions `json:"options"`
 }
 
 // runJob 是一次执行的不可变输入。

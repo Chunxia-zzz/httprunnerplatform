@@ -83,7 +83,18 @@
     - 已禁用成员记 `skipped`；已删除成员记 `error`（该分支页面走不到，见下）
     - ⭐ 实测发现：**被引用的用例不允许删除**（40003），所以「已删除成员」是防御性分支，覆盖放在单测里
     - 单测 20 项 + 端到端冒烟 [`scripts/smoke-suite.mjs`](scripts/smoke-suite.mjs) **54 项全绿**
-  - 待完成：测试计划与 cron 调度、CI Token 与 `/open` 触发、前端页面
+  - ✅ 已完成：**测试计划与 cron 调度**
+    - 计划 = 一组用例集 + 什么时候跑；`trigger_type` 支持 `manual` / `cron`
+    - ⭐ cron 在**保存时**校验（5 段 + 描述符），不让它变成"永远不跑的计划"
+    - ⭐ 每个计划自带 IANA 时区（默认 `Asia/Shanghai`），`next_fire_at` 按该时区算 ——
+      不绑时区的话服务器在 UTC 上跑，用户填的"早上 9 点"会静默错位 8 小时
+    - 进程内调度器（`internal/scheduler`，30 秒对账一次，自愈不依赖调用方）：
+      重入保护（两道：进程内 + DB 的 `last_run_id`）、不补跑但记 `last_missed_at`
+    - ⭐ 一次计划触发 = 每个用例集各一条执行记录（`plan_id` 关联），
+      失败隔离优先于"看起来只有一条"
+    - 单测 27 项；端到端冒烟 [`scripts/smoke-plan.mjs`](scripts/smoke-plan.mjs) **34 项全绿**
+      （配 `* * * * *` 真等一个调度点，验证定时触发真的跑了用例）
+  - 待完成：CI Token 与 `/open` 触发、编排层前端页面
 
 ## 快速开始（单文件交付）
 

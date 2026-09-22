@@ -450,6 +450,7 @@ type TestPlan struct {
 	SoftBase
 	ProjectID   uint64 `gorm:"not null;index" json:"project_id"`
 	Name        string `gorm:"size:128;not null" json:"name"`
+	Description string `gorm:"size:512;not null;default:''" json:"description"`
 	EnvID       uint64 `gorm:"not null;default:0" json:"env_id"`
 	TriggerType string `gorm:"size:16;not null;default:'manual'" json:"trigger_type"`
 	CronExpr    string `gorm:"size:64;not null;default:''" json:"cron_expr"`
@@ -478,11 +479,18 @@ type TestPlan struct {
 // 本表只保存汇总结果（Attribution 为 JSON 计数）。
 type RunRecord struct {
 	Base
-	ProjectID         uint64     `gorm:"not null;index" json:"project_id"`
-	TargetType        string     `gorm:"size:16;not null" json:"target_type"`
-	TargetID          uint64     `gorm:"not null;default:0" json:"target_id"`
-	TargetName        string     `gorm:"size:128;not null;default:''" json:"target_name"`
-	EnvID             uint64     `gorm:"not null;default:0" json:"env_id"`
+	ProjectID  uint64 `gorm:"not null;index" json:"project_id"`
+	TargetType string `gorm:"size:16;not null" json:"target_type"`
+	TargetID   uint64 `gorm:"not null;default:0" json:"target_id"`
+	TargetName string `gorm:"size:128;not null;default:''" json:"target_name"`
+	EnvID      uint64 `gorm:"not null;default:0" json:"env_id"`
+	// PlanID 只在"由测试计划触发"时非零。
+	//
+	// ⭐ 一次计划触发会为每个用例集各起一条执行记录（而不是合并成一条
+	// target_type=plan 的记录），这个字段就是那批记录的关联键。
+	// 为什么不合并：用例集之间本就该失败隔离 —— 一个用例集编译失败
+	// 不该让同计划里的其它用例集也跑不了。见 docs/用例集与测试计划设计.md 3.5。
+	PlanID            uint64     `gorm:"not null;default:0;index" json:"plan_id"`
 	TriggerType       string     `gorm:"size:16;not null;default:'manual'" json:"trigger_type"`
 	TriggerBy         uint64     `gorm:"not null;default:0" json:"trigger_by"`
 	Status            string     `gorm:"size:16;not null;default:'queued'" json:"status"`

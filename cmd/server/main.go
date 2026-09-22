@@ -26,6 +26,7 @@ import (
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/config"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/repo"
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/scheduler"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/service"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/webui"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/hrpclient"
@@ -268,6 +269,16 @@ func newServerCmd(g *globalFlags) *cobra.Command {
 			// （禁用/降级/重置密码），而中间件校验的是这份表。
 			// 传错实例的结果是"吊销成功了但没吊销到真正在用的会话"。
 			svcs := service.New(service.Deps{DB: db, Cfg: cfg, Sessions: sessions})
+
+			// 定时计划调度器。Start 之前不产生任何动作；
+			// Stop 必须发生在 svcs.Shutdown() **之前** —— 反过来会出现
+			// "调度器刚触发一批执行，运行服务已经关了"的窗口。
+			//
+			// ⚠️ 只在单实例部署下成立：多实例时每个实例都会触发同一个计划
+			// （见 internal/scheduler 包注释）。这条已写进部署文档。
+			sched := scheduler.New(db, svcs.Run)
+			sched.Start()
+
 			router := api.NewRouter(&api.Deps{
 				Cfg:      cfg,
 				DB:       db,
@@ -327,6 +338,9 @@ func newServerCmd(g *globalFlags) *cobra.Command {
 			if err := srv.Shutdown(shutdownCtx); err != nil {
 				logx.L().Warn().Err(err).Msg("优雅关闭 HTTP 服务失败")
 			}
+			// 调度器必须先停：它还在触发的话，刚起来的执行会在
+			// 运行服务关闭后变成孤儿。
+			sched.Stop()
 			svcs.Shutdown()
 			logx.L().Info().Msg("服务已关闭")
 			return nil

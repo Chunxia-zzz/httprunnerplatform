@@ -107,13 +107,18 @@ func (s *RunService) StartSuite(req StartRunRequest, triggerBy uint64) (*model.R
 		specs = append(specs, compiler.CaseSpec{Case: tc, Steps: steps})
 	}
 
+	trigger := strings.TrimSpace(req.TriggerType)
+	if trigger == "" {
+		trigger = model.TriggerManual
+	}
 	run := &model.RunRecord{
 		ProjectID:         project.ID,
 		TargetType:        model.TargetSuite,
 		TargetID:          su.ID,
 		TargetName:        su.Name,
-		TriggerType:       model.TriggerManual,
+		TriggerType:       trigger,
 		TriggerBy:         triggerBy,
+		PlanID:            req.PlanID,
 		Status:            model.RunQueued,
 		ExpectedCaseCount: len(specs),
 		Attribution:       jsonx.Map{},
