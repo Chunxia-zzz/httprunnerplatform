@@ -1,0 +1,22 @@
+# 换行符策略
+#
+# 为什么需要这个文件：本仓库在 Windows 上开发，默认 core.autocrlf 会在
+# checkout 时把 LF 换成 CRLF。对源码没影响，但有两类文件**必须逐字节保留**：
+#
+#   1. internal/parser/testdata/**  —— 引擎 stdout/stderr/summary.json 的原始采集，
+#      解析器有"按行解析"与"按分隔符切块"的断言，换行被改写会改变语义。
+#   2. testdata/**/*.yml          —— 引擎探针夹具，要与文档里的实测输出对得上。
+#
+# 因此统一策略是"仓库内一律 LF"，并对上述夹具关闭任何转换。
+* text=auto eol=lf
+
+# 引擎原始输出夹具：完全不碰
+/internal/parser/testdata/** -text
+
+# 探针夹具与本地 echo 服务：交给引擎的是这些文件的原始字节
+/testdata/** -text
+
+# 二进制
+*.exe binary
+*.zip binary
+*.db binary
