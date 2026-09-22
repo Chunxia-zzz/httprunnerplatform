@@ -63,8 +63,32 @@
 - ✅ **13.2 引擎实测**：四轮实测完成，结论已回写进方案与契约文档（修正了原方案中关于退出码归因、日志流、结果产出的多处错误假设）
 - ✅ **M1 后端**：编译器 / 执行器 / 结果解析 / 静态校验 / 服务编排 / REST API 全部完成，`go vet` 与全量单测通过
 - ✅ **端到端冒烟**：`bash ../httprunnerplatform-e2e/e2e.sh`（22 项断言全绿，覆盖建项目 → 建环境 → 建用例 → 校验 → YAML 预览 → 执行 → 步骤/断言明细 → 报告 → 日志 → 错误码）
-- ⬜ **M1 前端**：Vue 3 页面
-- ⬜ **M1 验收**：四条验收标准的最终确认
+- ✅ **M1 前端**：`web/` 下的 Vue 3 页面全部完成（登录 / 项目 / 环境 / 用例列表 / 用例编辑器 / 执行记录 / 执行详情），`vue-tsc` 与 `vite build` 均无错误
+- ✅ **M1 验收**：四条验收标准已由真实浏览器跑通（`node ../httprunnerplatform-ui/ui-smoke.mjs`，60 项断言全绿）
+
+## 前端开发
+
+前端在 `web/`（Vue 3 + Vite + TypeScript + Element Plus + Pinia）。
+
+```bash
+cd web
+npm install
+npm run dev        # http://127.0.0.1:5173，/api 自动代理到 127.0.0.1:8080
+```
+
+```bash
+npm run typecheck  # vue-tsc --noEmit
+npm run build      # 先类型检查，再产出 web/dist
+```
+
+> **为什么走 Vite 代理而不是后端开 CORS**
+>
+> 1. 会话 Cookie 是 `HttpOnly` + `SameSite=Lax`。`5173` 与 `8080` 虽属同一站点
+>    （同 host、不同端口），但浏览器对"同站"的判定本身就依赖这个前提；一旦
+>    以后换成不同 host 部署，CORS 方案还需要额外处理 `SameSite=None; Secure`。
+> 2. 走代理后前端只认 `/api` 这一个同源前缀，不需要把后端地址写进构建产物里。
+>
+> 代理目标可用环境变量覆盖：`HRP_API_TARGET=http://127.0.0.1:9000 npm run dev`。
 
 ## 环境准备
 

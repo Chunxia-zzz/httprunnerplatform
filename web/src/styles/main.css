@@ -1,0 +1,103 @@
+/* 全局样式。M1 只做必要的重置与几处复用类，页面级样式留在各自组件里。 */
+
+:root {
+  --hrp-bg: #f5f7fa;
+  --hrp-panel: #ffffff;
+  --hrp-border: #dcdfe6;
+  --hrp-muted: #909399;
+  --hrp-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  background: var(--hrp-bg);
+  color: #303133;
+  font-size: 14px;
+}
+
+/* 报文快照、YAML、日志统一用等宽字体 + 保留换行。
+   ⚠️ 必须 pre-wrap：报文 JSON 经常是一行几百字符，不换行会把面板撑爆。 */
+.hrp-pre {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--hrp-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: #fafafa;
+  border: 1px solid var(--hrp-border);
+  border-radius: 4px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.hrp-pre--tall {
+  max-height: 640px;
+}
+
+.hrp-mono {
+  font-family: var(--hrp-mono);
+  font-size: 12px;
+}
+
+.hrp-muted {
+  color: var(--hrp-muted);
+}
+
+.hrp-page {
+  padding: 16px 20px 32px;
+}
+
+.hrp-page__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.hrp-page__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.hrp-page__sub {
+  margin: 4px 0 0;
+  color: var(--hrp-muted);
+  font-size: 12px;
+}
+
+.hrp-card + .hrp-card {
+  margin-top: 14px;
+}
+
+.hrp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.hrp-empty-hint {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--hrp-muted);
+}
+
+/* 步骤时间线上"平台重建"的断言用虚线左边框，与引擎给出的结论区分开 */
+.hrp-rebuilt {
+  border-left: 3px dashed var(--el-color-warning);
+  padding-left: 8px;
+}
