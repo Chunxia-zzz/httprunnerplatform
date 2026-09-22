@@ -41,6 +41,7 @@ type Set struct {
 	Project     *ProjectService
 	Environment *EnvironmentService
 	Case        *CaseService
+	Suite       *SuiteService
 	Run         *RunService
 	User        *UserService
 }
@@ -51,6 +52,7 @@ func New(d Deps) *Set {
 		Project:     &ProjectService{Deps: d},
 		Environment: &EnvironmentService{Deps: d},
 		Case:        &CaseService{Deps: d},
+		Suite:       &SuiteService{Deps: d},
 		Run:         NewRunService(d),
 		User:        &UserService{Deps: d},
 	}

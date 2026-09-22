@@ -75,6 +75,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerProjectRoutes(authed, deps)
 		registerEnvironmentRoutes(authed, deps)
 		registerCaseRoutes(authed, deps)
+		registerSuiteRoutes(authed, deps)
 		registerRunRoutes(authed, deps)
 		registerUserRoutes(authed, deps)
 	}
@@ -136,6 +137,25 @@ func registerCaseRoutes(g *gin.RouterGroup, deps *Deps) {
 	g.DELETE("/cases/:id", h.Delete)
 	g.GET("/cases/:id/yaml", h.YAML)
 	g.POST("/cases/:id/validate", h.Validate)
+}
+
+// registerSuiteRoutes 注册用例集相关路由。
+//
+// 与用例/环境同一套路：「列举/新建」挂在项目路径下（用例集归属项目），
+// 「读取/修改/删除/成员」直接用用例集 ID。
+//
+// 成员接口单独成一段（/suites/{id}/cases）：它是"全量替换"语义，
+// 与用例集自身的 CRUD 混在一起会让人误以为能单独增删某一条。
+func registerSuiteRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newSuiteHandler(deps)
+	g.GET("/projects/:id/suites", h.List)
+	g.POST("/projects/:id/suites", h.Create)
+
+	g.GET("/suites/:id", h.Get)
+	g.PUT("/suites/:id", h.Update)
+	g.DELETE("/suites/:id", h.Delete)
+	g.GET("/suites/:id/cases", h.Members)
+	g.PUT("/suites/:id/cases", h.SetMembers)
 }
 
 // registerRunRoutes 注册执行相关路由。

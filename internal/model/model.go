@@ -95,6 +95,26 @@ const (
 	StatusSkipped = "skipped"
 )
 
+// 用例集执行模式。
+//
+// `parallel` 只建字段不实现：平台的一条硬约束是「一个用例一个独立子进程」
+// （实测 A2：断言失败会让引擎 panic，目录模式下整批结果丢失）。并行意味着
+// 同时起多个子进程，会让归因与日志归属难以判断。见 docs/用例集与测试计划设计.md 2.1。
+const (
+	ExecuteSequential = "sequential"
+	ExecuteParallel   = "parallel"
+)
+
+// 用例集遇错行为。
+//
+// 默认 `continue`：CI 里一次就能看到全部失败，不用「修一个跑一次」。
+// 接口用例本该互不依赖，连锁失败不是主要风险（设计文档决策 2）。
+const (
+	OnFailureAbort    = "abort"
+	OnFailureContinue = "continue"
+	OnFailureDefault  = OnFailureContinue
+)
+
 // 失败归因枚举。判别规则见 docs/数据库设计.md 第 4 节。
 //
 // ⚠️ 判别顺序不可调换：panic 必须先于 exit_code 判断，
@@ -401,25 +421,54 @@ type TestSuite struct {
 }
 
 // SuiteCase 是用例集成员，带执行顺序。
+//
+// ⭐ 唯一索引 (suite_id, case_id) 是刻意的：同一用例在一个用例集里出现两次会
+// 直接破坏「通过率的分母」，而这类重复几乎都是误操作。需要「跑两遍」的场景
+// 由参数化（ParamDataset）解决，不靠同一条成员重复两行。
 type SuiteCase struct {
 	Base
-	SuiteID uint64 `gorm:"not null;index" json:"suite_id"`
-	CaseID  uint64 `gorm:"not null" json:"case_id"`
+	SuiteID uint64 `gorm:"not null;uniqueIndex:idx_suite_case" json:"suite_id"`
+	CaseID  uint64 `gorm:"not null;uniqueIndex:idx_suite_case" json:"case_id"`
+	Seq     int    `gorm:"not null;default:0" json:"seq"`
+}
+
+// PlanSuite 是测试计划与用例集的关联。
+//
+// ⭐ 为什么不用逗号字符串（原 TestPlan.SuiteIDs）：
+//  1. `size:255` 的字符串大约 40 个 ID 就写满；
+//  2. 用例集被删除或重命名时不会级联，会留下悬空 ID ——
+//     表现为「计划里明明挂了 3 个用例集，实际只跑了 2 个」，且没有任何报错。
+type PlanSuite struct {
+	Base
+	PlanID  uint64 `gorm:"not null;uniqueIndex:idx_plan_suite" json:"plan_id"`
+	SuiteID uint64 `gorm:"not null;uniqueIndex:idx_plan_suite" json:"suite_id"`
 	Seq     int    `gorm:"not null;default:0" json:"seq"`
 }
 
 // TestPlan 是测试计划。定时任务不是独立概念，而是它的属性。
 type TestPlan struct {
 	SoftBase
-	ProjectID      uint64 `gorm:"not null;index" json:"project_id"`
-	Name           string `gorm:"size:128;not null" json:"name"`
-	SuiteIDs       string `gorm:"size:255;not null;default:''" json:"suite_ids"`
-	EnvID          uint64 `gorm:"not null;default:0" json:"env_id"`
-	TriggerType    string `gorm:"size:16;not null;default:'manual'" json:"trigger_type"`
-	CronExpr       string `gorm:"size:64;not null;default:''" json:"cron_expr"`
+	ProjectID   uint64 `gorm:"not null;index" json:"project_id"`
+	Name        string `gorm:"size:128;not null" json:"name"`
+	EnvID       uint64 `gorm:"not null;default:0" json:"env_id"`
+	TriggerType string `gorm:"size:16;not null;default:'manual'" json:"trigger_type"`
+	CronExpr    string `gorm:"size:64;not null;default:''" json:"cron_expr"`
+	// Timezone 是 IANA 时区名（如 Asia/Shanghai）。
+	//
+	// ⭐ 不绑时区的后果很隐蔽：服务器跑在 UTC 上，用户填 `0 9 * * *`
+	// 以为是「早上 9 点」，实际是 UTC 9 点。这类错误不会报错，
+	// 只会让所有计划静默错位，发现它往往要等好几周。
+	Timezone       string `gorm:"size:64;not null;default:'Asia/Shanghai'" json:"timezone"`
 	NotifyConfigID uint64 `gorm:"not null;default:0" json:"notify_config_id"`
 	Timeout        int    `gorm:"not null;default:0" json:"timeout"`
 	Enabled        bool   `gorm:"not null" json:"enabled"`
+	// --- 运行态：调度器维护，用于让「错过」与「跳过」可见 ---
+	LastRunID   uint64     `gorm:"not null;default:0" json:"last_run_id"`
+	LastFiredAt *time.Time `json:"last_fired_at"`
+	// LastMissedAt 记录最近一个**没有真正触发**的调度点。
+	// 不补跑是决策 3，但「错过」这件事不能被静默吞掉。
+	LastMissedAt   *time.Time `json:"last_missed_at"`
+	LastSkipReason string     `gorm:"size:255;not null;default:''" json:"last_skip_reason"`
 }
 
 // RunRecord 是一次执行的汇总层记录。
@@ -570,6 +619,7 @@ func (ParamDataset) TableName() string    { return "param_dataset" }
 func (TestSuite) TableName() string       { return "test_suite" }
 func (SuiteCase) TableName() string       { return "suite_case" }
 func (TestPlan) TableName() string        { return "test_plan" }
+func (PlanSuite) TableName() string       { return "plan_suite" }
 func (RunRecord) TableName() string       { return "run_record" }
 func (CaseResult) TableName() string      { return "case_result" }
 func (StepResult) TableName() string      { return "step_result" }
@@ -590,6 +640,7 @@ func AllModels() []any {
 		&TestSuite{},
 		&SuiteCase{},
 		&TestPlan{},
+		&PlanSuite{},
 		&RunRecord{},
 		&CaseResult{},
 		&StepResult{},

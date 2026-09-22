@@ -73,6 +73,10 @@
   - ⭐ **权限变更立即吊销会话**：会话表缓存着 `Principal`（含 role），不吊销的话被降级的管理员在 TTL 内仍是管理员
   - 前端：账号管理页（仅管理员可见）、顶栏「修改密码」、成员侧边栏不出现管理入口
   - 测试：`internal/auth` 7 项 + `internal/service` 30 余项 + `internal/api` 9 项；浏览器端到端 [`scripts/ui/auth-smoke.mjs`](scripts/ui/auth-smoke.mjs) **44 项全绿**（脚本已入库）
+- 🔄 **③ 编排层（用例集 / 测试计划 / CI Token）** 进行中：
+  - 设计已定稿：[docs/用例集与测试计划设计.md](docs/用例集与测试计划设计.md)
+  - 已完成：用例集的模型、服务、API 与 15 项单测（成员唯一、跨项目拒绝、已删除成员可见化）
+  - 待完成：用例集**执行**（1 条 RunRecord + N 条 CaseResult）、测试计划与 cron 调度、CI Token 与 `/open` 触发、前端页面
 
 ## 快速开始（单文件交付）
 
