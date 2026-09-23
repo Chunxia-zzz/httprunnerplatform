@@ -278,6 +278,20 @@ export interface CaseConfig {
   verify?: boolean
   export?: string[]
   weight?: number
+  /**
+   * 平台层参数化引用（M3 · ③-b）。
+   *
+   * ⚠️ 这不是引擎的 config.parameters 键，而是独立的 platform-only 键：
+   * compiler 渲染时会把它解引用成引擎语法（list → 关联 pairs；csv → ${P()}），
+   * 并在写出 YAML 前摘掉。limit 是可选的用例级覆盖（0 = 用数据集默认值）。
+   */
+  datasets?: DatasetRef[]
+}
+
+/** 用例对数据集的引用。name 必须与参数集页的数据集名一致。 */
+export interface DatasetRef {
+  name: string
+  limit?: number
 }
 
 export type CasePriority = 'P0' | 'P1' | 'P2' | 'P3'
@@ -545,6 +559,58 @@ export interface RunLogs {
 }
 
 // ---------------------------------------------------------------------------
+// 参数化数据集（M3 · ③-b）
+// ---------------------------------------------------------------------------
+
+/** 数据源。list = 内联列表；csv = 项目工作区下的 CSV 文件。 */
+export type ParamSource = 'list' | 'csv'
+
+/** 迭代策略。引擎只支持顺序（实测 A22：无 random/unique 开关）。 */
+export type ParamStrategy = 'sequential'
+
+/**
+ * 数据集视图。
+ *
+ * row_count / columns / limit_effective 是服务端算好的派生值，
+ * 前端直接展示即可，不要自己数。
+ */
+export interface ParamDataset {
+  id: ID
+  project_id: ID
+  name: string
+  source: ParamSource | string
+  /** list 数据集的 [{...}, ...]；csv 数据集为 null（jsonx.Any 空值语义） */
+  inline: unknown
+  /** csv 数据集的相对路径 data/xxx.csv；list 数据集为空串 */
+  csv_path: string
+  strategy: ParamStrategy | string
+  /** 0 = 全部迭代；>0 = 只取前 N 行（编译期裁剪） */
+  limit: number
+  /** 数据行数（不含 CSV 表头） */
+  row_count: number
+  /** 列名列表 */
+  columns: string[]
+  /** 实际生效迭代次数 = limit>0 ? min(limit, row_count) : row_count */
+  limit_effective: number
+  created_at: string
+  updated_at: string
+}
+
+/** 创建/更新请求。source=csv 时 csv_name 或 csv_text 至少一个。 */
+export interface ParamDatasetReq {
+  name: string
+  source: ParamSource | string
+  /** list 来源：形如 [{"username":"a"}, ...] */
+  inline?: unknown
+  /** csv 来源：纯文件名，形如 users.csv（不含路径） */
+  csv_name?: string
+  /** csv 来源：直接传 CSV 文本（新建或替换内容） */
+  csv_text?: string
+  strategy?: ParamStrategy | string
+  limit?: number
+}
+
+// ---------------------------------------------------------------------------
 // 引擎
 // ---------------------------------------------------------------------------
 
@@ -725,4 +791,51 @@ export interface OpenTriggerResp {
   wait: boolean
   /** 异步触发时给出的轮询地址（/open/runs/{id}/result） */
   poll_at?: string
+}
+
+// ---------------------------------------------------------------------------
+// 单步调试（/cases/{id}/debug）
+// ---------------------------------------------------------------------------
+
+/** 单步调试请求体。 */
+export interface DebugStepReq {
+  project_id: ID
+  case_id: ID
+  /** 要调试的目标步骤 seq。平台会真实执行「启用的、seq ≤ 它」的前缀步骤。 */
+  step_seq: number
+  /** 0 = 项目默认环境 */
+  env_id?: ID
+  /** 同步阻塞上限（秒），0 = 平台默认 30s */
+  timeout_sec?: number
+}
+
+/** 调试中单个步骤的结果（与执行详情 StepResult 同构，但字段是 parser 原始名）。 */
+export interface DebugStep {
+  seq: number
+  name: string
+  step_type: string
+  status: StepStatus | string
+  /** ⭐ 标记这一条就是用户要调试的目标步骤 */
+  is_target: boolean
+  elapsed_ms: number
+  extract_result: EnvMap | null
+  final_url: string
+  final_url_source: string
+  request: RequestSnapshot | null
+  response: ResponseSnapshot | null
+  assertions: AssertionResult[]
+  error_msg: string
+}
+
+/** 单步调试结果。 */
+export interface DebugStepResult {
+  status: StepStatus | string
+  attribution: string
+  error_msg: string
+  panic: boolean
+  duration_ms: number
+  steps: DebugStep[]
+  target_seq: number
+  actual_step_count: number
+  compile_error?: string
 }

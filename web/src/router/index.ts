@@ -28,6 +28,14 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '环境管理' },
       },
       {
+        // 参数化数据集：用例的数据驱动来源。挂在用例管理之后，
+        // 因为它是「用某个用例会引用的资源」，而不是独立执行入口。
+        path: 'datasets',
+        name: 'datasets',
+        component: () => import('@/views/ParamListView.vue'),
+        meta: { title: '参数化数据集' },
+      },
+      {
         path: 'cases',
         name: 'cases',
         component: () => import('@/views/CaseListView.vue'),

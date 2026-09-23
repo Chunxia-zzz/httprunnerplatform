@@ -14,6 +14,8 @@ import type { KVRow } from '@/utils/format'
 export interface EditorStep {
   /** 仅用于 v-for key 与排序，不发给后端 */
   uid: number
+  /** 后端步骤的 seq（数据库序号）。新建步骤时由父组件分配（当前最大 seq + 1） */
+  seq: number
   name: string
   enabled: boolean
   method: string
@@ -42,6 +44,7 @@ export function newStep(): EditorStep {
   seq += 1
   return {
     uid: seq,
+    seq: 0,
     name: '',
     enabled: true,
     method: 'GET',
@@ -65,6 +68,7 @@ export function cloneStep(src: EditorStep): EditorStep {
   return {
     ...src,
     uid: seq,
+    seq: 0, // 复制出来的步骤是新的，seq 由父组件在保存时统一分配
     name: src.name,
     headers: src.headers.map((r) => ({ ...r })),
     params: src.params.map((r) => ({ ...r })),

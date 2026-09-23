@@ -1,0 +1,16 @@
+config:
+    name: "PARAM-csv-direct-key"
+    verify: false
+    parameters:
+        data/users.csv: null
+
+teststeps:
+    -
+        name: "查用户"
+        request:
+            method: GET
+            url: "http://127.0.0.1:8899/get"
+            params:
+                u: "$username"
+        validate:
+            - eq: ["status_code", 200]

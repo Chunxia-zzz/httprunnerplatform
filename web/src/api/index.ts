@@ -9,6 +9,7 @@ export * as planApi from './plan'
 export * as runApi from './run'
 export * as engineApi from './engine'
 export * as userApi from './user'
+export * as paramApi from './param'
 
 // ---------------------------------------------------------------------------
 // 逐个透出子模块里的**具名导出**。

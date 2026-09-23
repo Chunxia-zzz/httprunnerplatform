@@ -84,12 +84,16 @@ func (w *Workspace) CaseFile(caseCode string) (string, error) {
 
 // CopyFrom 把编译产物从项目持久工作区复制进来。
 //
-// 只复制运行必需的两种东西：`.env` 与 `testcases/`。
+// 复制运行必需的三类东西：`.env`、`testcases/` 与 `data/`（M3 参数化 CSV）。
 // 不复制 `results/` 之类的运行残留 —— 那正是要隔离的对象。
+//
+// data/ 必须复制的原因：CSV 参数化的引用写法是 `${P(data/xxx.csv)}`（实测 A22），
+// 而 `${P()}` 的相对路径以**子进程 cwd（运行工作区根）**为基准。
+// 只编译 YAML 不复制数据文件，参数化会在执行时报"打开文件失败"。
 func (w *Workspace) CopyFrom(projectWorkspace string) error {
 	projectWorkspace = filepath.Clean(projectWorkspace)
 	if projectWorkspace == w.root {
-		return fmt.Errorf("项目工作区与运行工作区相同（%s）：必须隔离，否则运行产物会互相覆盖", w.root)
+		return fmt.Errorf("项目工作区与运行工作区相同（%s）：必须隔离，否则运行产物会互相覆盖", projectWorkspace)
 	}
 
 	if err := os.MkdirAll(w.TestcasesDir(), 0o755); err != nil {
@@ -117,6 +121,25 @@ func (w *Workspace) CopyFrom(projectWorkspace string) error {
 		dst := filepath.Join(w.TestcasesDir(), e.Name())
 		if err := copyFile(src, dst); err != nil {
 			return fmt.Errorf("复制用例 %s 失败: %w", e.Name(), err)
+		}
+	}
+
+	// data/（参数化 CSV）：目录不存在时静默跳过 —— 绝大多数用例没有参数化，
+	// 不该为它们在项目工作区里强制建目录。
+	dataSrc := filepath.Join(projectWorkspace, "data")
+	dataEntries, err := os.ReadDir(dataSrc)
+	if err == nil {
+		dstDir := filepath.Join(w.root, "data")
+		if err := os.MkdirAll(dstDir, 0o755); err != nil {
+			return fmt.Errorf("创建数据目录失败: %w", err)
+		}
+		for _, e := range dataEntries {
+			if e.IsDir() {
+				continue
+			}
+			if err := copyFile(filepath.Join(dataSrc, e.Name()), filepath.Join(dstDir, e.Name())); err != nil {
+				return fmt.Errorf("复制数据文件 %s 失败: %w", e.Name(), err)
+			}
 		}
 	}
 	return nil

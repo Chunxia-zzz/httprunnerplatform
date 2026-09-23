@@ -45,6 +45,8 @@ type Set struct {
 	Plan        *PlanService
 	Token       *TokenService
 	Run         *RunService
+	Debug       *DebugService
+	Param       *ParamService
 	User        *UserService
 }
 
@@ -58,6 +60,8 @@ func New(d Deps) *Set {
 		Plan:        &PlanService{Deps: d},
 		Token:       &TokenService{Deps: d},
 		Run:         NewRunService(d),
+		Debug:       &DebugService{Deps: d},
+		Param:       &ParamService{Deps: d},
 		User:        &UserService{Deps: d},
 	}
 }

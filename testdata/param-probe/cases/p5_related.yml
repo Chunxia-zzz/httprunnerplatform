@@ -1,0 +1,19 @@
+config:
+    name: "PARAM-related-inline-pairs"
+    verify: false
+    parameters:
+        username-password:
+            - ["alice", "pw1"]
+            - ["bob", "pw2"]
+
+teststeps:
+    -
+        name: "查用户"
+        request:
+            method: GET
+            url: "http://127.0.0.1:8899/get"
+            params:
+                u: "$username"
+                p: "$password"
+        validate:
+            - eq: ["status_code", 200]

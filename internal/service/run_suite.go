@@ -266,6 +266,11 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 	//    任意一个用例写坏都会让整个编译失败、整批都跑不了 ——
 	//    而单用例执行时我们定的原则就是"邻居写坏了不挡住本条"。
 	projectWS := projectWorkspace(s.Cfg, job.project)
+	datasets, err := loadDatasets(s.DB, job.project.ID)
+	if err != nil {
+		s.finishSuite(job, nil, model.RunError, err.Error(), started, len(job.specs))
+		return
+	}
 	type planned struct {
 		tc *model.TestCase
 		cc compiler.CompiledCase
@@ -274,9 +279,11 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 	compileErrors := make([]suiteOutcome, 0)
 	for _, spec := range job.specs {
 		comp, err := compiler.Compile(&compiler.Input{
-			Project: job.project,
-			Env:     job.env,
-			Cases:   []compiler.CaseSpec{spec},
+			Project:       job.project,
+			Env:           job.env,
+			Cases:         []compiler.CaseSpec{spec},
+			WorkspaceRoot: projectWS,
+			Datasets:      datasets,
 		}, projectWS)
 		if err != nil {
 			compileErrors = append(compileErrors, suiteOutcome{

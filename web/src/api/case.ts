@@ -4,6 +4,8 @@ import type {
   CaseListQuery,
   CaseListItem,
   CaseReq,
+  DebugStepReq,
+  DebugStepResult,
   ID,
   ModuleCount,
   PageData,
@@ -57,6 +59,16 @@ export function caseYaml(id: ID, envId?: ID): Promise<YAMLPreview> {
 }
 
 /**
+ * 保存源码视图里编辑过的 YAML（M3 ③-c 4.2）。
+ *
+ * 后端会把 YAML 反解析回结构化数据落库。反解析失败（非法 YAML、字段类型错）
+ * 返回 code=50003，错误信息带「第 N 行」前缀，前端据此高亮报错行。
+ */
+export function saveCaseYaml(id: ID, yaml: string): Promise<CaseDetail> {
+  return req<CaseDetail>({ method: 'PUT', url: `/cases/${id}/yaml`, data: { yaml } })
+}
+
+/**
  * 静态校验（不调用引擎）。
  *
  * ⚠️ 校验未通过时后端返回 **HTTP 200 + code=50004**，
@@ -82,4 +94,19 @@ export const ISSUE_CODE_HINT: Record<string, string> = {
     '引擎以 config.name 作为 summary.json 的唯一标识，重名会导致执行结果无法区分（实测 F11）。',
   EMPTY_STEPS:
     '引擎没有"跳过步骤"语法，全部禁用 = 空用例，会被静默丢弃（实测 F5：退出码 0 但一条都没跑）。',
+}
+
+/**
+ * 单步调试（同步返回）。
+ *
+ * 这是 M3 调试体验的核心：平台临时构造「只含目标步骤 + 前置步骤」的最小用例，
+ * 跑一个独立子进程后返回结构化结果（含每步的变量值、报文快照、断言明细），
+ * 不落库、不进执行历史。
+ */
+export function debugStep(data: DebugStepReq): Promise<DebugStepResult> {
+  return req<DebugStepResult>({
+    method: 'POST',
+    url: `/cases/${data.case_id}/debug`,
+    data,
+  })
 }

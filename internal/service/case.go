@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/compiler"
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/decompiler"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/validator"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/jsonx"
@@ -387,16 +389,59 @@ func (s *CaseService) RenderYAML(id, envID uint64) (*YAMLPreview, error) {
 	if err != nil {
 		return nil, err
 	}
+	datasets, err := loadDatasets(s.DB, tc.ProjectID)
+	if err != nil {
+		return nil, err
+	}
 	out, err := compiler.Render(&compiler.Input{
-		Project: project,
-		Env:     env,
-		Cases:   []compiler.CaseSpec{{Case: tc, Steps: steps}},
+		Project:       project,
+		Env:           env,
+		Cases:         []compiler.CaseSpec{{Case: tc, Steps: steps}},
+		WorkspaceRoot: projectWorkspace(s.Cfg, project),
+		Datasets:      datasets,
 	})
 	if err != nil {
 		return nil, response.Wrap(response.CodeCompileFail, "编译失败："+err.Error(), err)
 	}
 	cc := out.Cases[0]
 	return &YAMLPreview{FileName: cc.FileName, YAML: cc.YAML, Env: out.EnvText}, nil
+}
+
+// SaveYAML 把源码视图里编辑过的 YAML 反解析回结构化并落库（M3 ③-c 4.2）。
+//
+// 这是「源码可编辑」的闭环入口：用户改了 YAML → 反解析（decompiler）→
+// 复用 Update 全量覆盖。反解析失败（非法 YAML、字段类型错）时带行号返回，
+// 前端据此高亮报错行 —— 而不是静默丢弃用户改不出来的内容。
+func (s *CaseService) SaveYAML(id uint64, yamlText string) (*CaseDetail, error) {
+	old, err := loadCase(s.DB, id)
+	if err != nil {
+		return nil, err
+	}
+
+	parsed, err := decompiler.Parse(yamlText)
+	if err != nil {
+		return nil, response.Wrap(response.CodeCompileFail, "源码反解析失败："+err.Error(), err)
+	}
+
+	// 反解析产物 → service.CaseReq（JSON 中转，形状兼容）。
+	// code 无法从 YAML 还原（YAML 里只有 config.name），沿用原值。
+	raw, _ := json.Marshal(parsed)
+	var req CaseReq
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return nil, response.Wrap(response.CodeCompileFail, "源码反解析结果结构异常："+err.Error(), err)
+	}
+	req.Code = old.Code
+	// 反解析只还原了 name/config/steps，其余字段沿用原值（模块/优先级/标签/状态/描述）。
+	req.Module = old.Module
+	req.Priority = old.Priority
+	req.Tags = old.Tags
+	req.Status = old.Status
+	req.Description = old.Description
+	if req.CaseTimeout == 0 {
+		req.CaseTimeout = old.CaseTimeout
+	}
+
+	return s.Update(id, req)
 }
 
 // ValidateOutcome 是静态校验的结果。
@@ -439,10 +484,16 @@ func (s *CaseService) Validate(id, envID uint64) (*ValidateOutcome, error) {
 		return out, nil
 	}
 
+	datasets, err := loadDatasets(s.DB, tc.ProjectID)
+	if err != nil {
+		return nil, err
+	}
 	comp, err := compiler.Render(&compiler.Input{
-		Project: project,
-		Env:     env,
-		Cases:   []compiler.CaseSpec{{Case: tc, Steps: steps}},
+		Project:       project,
+		Env:           env,
+		Cases:         []compiler.CaseSpec{{Case: tc, Steps: steps}},
+		WorkspaceRoot: projectWorkspace(s.Cfg, project),
+		Datasets:      datasets,
 	})
 	if err != nil {
 		return nil, response.Wrap(response.CodeCompileFail, "编译失败："+err.Error(), err)

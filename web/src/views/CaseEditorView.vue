@@ -17,14 +17,19 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import {
   ApiError,
   caseApi,
+  paramApi,
   runApi,
   type CaseDetail,
   type CaseReq,
+  type DebugStepResult,
+  type DatasetRef,
   type ModuleCount,
+  type ParamDataset,
   type StepReq,
   type ValidateOutcome,
   type YAMLPreview,
 } from '@/api'
+import DebugPanel from '@/components/DebugPanel.vue'
 import KeyValueEditor from '@/components/KeyValueEditor.vue'
 import StepEditor from '@/components/StepEditor.vue'
 import ValidateIssues from '@/components/ValidateIssues.vue'
@@ -60,10 +65,14 @@ const form = reactive({
   configExport: [] as string[],
   /** '' = 不写 verify 键（跟随环境）；'true' / 'false' = 显式覆盖 */
   verifyOverride: '' as '' | 'true' | 'false',
+  /** 数据集引用（M3 · ③-b）：[{name, limit}]。limit 0 = 用数据集默认值 */
+  datasets: [] as DatasetRef[],
 })
 
 const steps = ref<EditorStep[]>([])
 const modules = ref<ModuleCount[]>([])
+/** 当前项目的数据集列表，供「数据集」tab 勾选 */
+const datasets = ref<ParamDataset[]>([])
 
 const preview = ref<YAMLPreview | null>(null)
 const previewLoading = ref(false)
@@ -73,7 +82,12 @@ const validateOutcome = ref<ValidateOutcome | null>(null)
 const validateLoading = ref(false)
 const validateError = ref('')
 
-const activeTab = ref<'validate' | 'yaml'>('validate')
+const activeTab = ref<'validate' | 'yaml' | 'debug'>('validate')
+
+// 单步调试状态
+const debugResult = ref<DebugStepResult | null>(null)
+const debugLoading = ref(false)
+const debugError = ref('')
 
 /** 编辑器默认落在「校验」页；跑通之后用户更常看 YAML。 */
 
@@ -103,7 +117,7 @@ const validateDisabledReason = computed(() => {
 async function load() {
   if (!isEdit.value) {
     // 新建：给一个可用的初始步骤，否则用户面对空白的"步骤"区不知从何下手
-    steps.value = [newStep()]
+    steps.value = [newStepWithSeq()]
     return
   }
   loading.value = true
@@ -142,13 +156,28 @@ function applyDetail(detail: CaseDetail) {
         : 'false'
       : ''
 
+  // datasets 是 platform-only 键（不是 config.parameters），编译时解引用。
+  const ds = (raw as { datasets?: unknown }).datasets
+  form.datasets = Array.isArray(ds)
+    ? ds
+        .map((d) => {
+          const o = d as { name?: unknown; limit?: unknown }
+          return {
+            name: typeof o?.name === 'string' ? o.name : '',
+            limit: typeof o?.limit === 'number' && o.limit > 0 ? o.limit : 0,
+          }
+        })
+        .filter((d) => d.name !== '')
+    : []
+
   steps.value = detail.steps.map(toEditorStep)
-  if (steps.value.length === 0) steps.value = [newStep()]
+  if (steps.value.length === 0) steps.value = [newStepWithSeq()]
 }
 
 function toEditorStep(s: CaseDetail['steps'][number]): EditorStep {
   const step = newStep()
   const req = s.request ?? {}
+  step.seq = s.seq
   step.name = s.name
   step.enabled = s.enabled
   step.method = (req.method || 'GET').toUpperCase()
@@ -258,6 +287,7 @@ function toStepReq(s: EditorStep): StepReq {
   }
 
   return {
+    seq: s.seq,
     name: s.name.trim(),
     enabled: s.enabled,
     step_type: 'request',
@@ -277,6 +307,11 @@ function toCaseReq(): CaseReq {
   if (form.configExport.length) config.export = [...form.configExport]
   // 只在用户显式选择时才写 verify 键：写了 false 会覆盖环境的 verify_ssl
   if (form.verifyOverride !== '') config.verify = form.verifyOverride === 'true'
+  // 数据集引用：只有勾选了才写，且去掉 limit=0 的冗余字段（0 = 用数据集默认）。
+  const dsRefs = form.datasets
+    .filter((d) => d.name !== '')
+    .map((d) => ((d.limit ?? 0) > 0 ? { name: d.name, limit: d.limit } : { name: d.name }))
+  if (dsRefs.length) config.datasets = dsRefs
 
   return {
     code: form.code.trim(),
@@ -385,6 +420,20 @@ async function refreshPreview() {
   }
 }
 
+/**
+ * 源码保存成功后的同步：重新拉详情（让表单反映 YAML 里改过的内容）
+ * 并重新编译预览。这样「源码改 → 表单跟着变」是双向一致的。
+ */
+async function onYamlSaved() {
+  try {
+    const detail = await caseApi.getCase(caseId.value)
+    applyDetail(detail)
+    await refreshPreview()
+  } catch (e) {
+    notifyError(e, '同步源码改动失败')
+  }
+}
+
 /** 保存并执行：保证"跑的就是你看到的"，不接受未保存的改动被执行。 */
 async function saveAndRun() {
   const ok = await save({ silent: true })
@@ -408,12 +457,61 @@ async function saveAndRun() {
   }
 }
 
+/**
+ * 单步调试：保存后，用目标步骤的 seq 调后端 /cases/{id}/debug。
+ *
+ * 为什么必须先保存：编译方向是「DB → YAML」单向的，调试执行的是**落库后**的
+ * 步骤（临时最小用例从 DB 读取），未保存的改动不会被调试。这和「保存并执行」
+ * 是同一套"跑的就是你看到的"原则。
+ */
+async function debugStep(index: number) {
+  if (!isEdit.value) {
+    ElMessage.warning('用例尚未保存，无法调试 —— 先点保存')
+    return
+  }
+
+  const ok = await save({ silent: true })
+  if (!ok) return
+
+  const target = steps.value[index]
+  if (!target || target.seq <= 0) {
+    ElMessage.warning('该步骤还没有序号，请先保存')
+    return
+  }
+
+  activeTab.value = 'debug'
+  debugLoading.value = true
+  debugError.value = ''
+  debugResult.value = null
+  try {
+    debugResult.value = await caseApi.debugStep({
+      project_id: projects.currentId,
+      case_id: caseId.value,
+      step_seq: target.seq,
+      env_id: 0,
+    })
+  } catch (e) {
+    debugResult.value = null
+    debugError.value = e instanceof ApiError ? e.message : '调试失败'
+  } finally {
+    debugLoading.value = false
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 步骤操作
 // ---------------------------------------------------------------------------
 
 function addStep() {
-  steps.value.push(newStep())
+  steps.value.push(newStepWithSeq())
+}
+
+/** 新建步骤并分配后端 seq（当前最大 seq + 1），供保存与调试定位使用。 */
+function newStepWithSeq(): EditorStep {
+  const s = newStep()
+  const maxSeq = steps.value.reduce((m, x) => Math.max(m, x.seq), 0)
+  s.seq = maxSeq + 1
+  return s
 }
 
 function removeStep(index: number) {
@@ -445,9 +543,82 @@ async function loadModules() {
   }
 }
 
+/** 加载当前项目的数据集，供「数据集」tab 勾选。 */
+async function loadDatasets() {
+  if (!projects.currentId) {
+    datasets.value = []
+    return
+  }
+  try {
+    datasets.value = await paramApi.listDatasets(projects.currentId)
+  } catch {
+    // 数据集列表拿不到不影响编辑（只是没得选）
+  }
+}
+
+/** 数据集名 → 当前引用（含 limit）。找不到 = 未引用。 */
+function refOf(name: string): DatasetRef | undefined {
+  return form.datasets.find((d) => d.name === name)
+}
+
+function toggleDataset(ds: ParamDataset) {
+  const idx = form.datasets.findIndex((d) => d.name === ds.name)
+  if (idx >= 0) {
+    form.datasets.splice(idx, 1)
+  } else {
+    form.datasets.push({ name: ds.name, limit: 0 })
+  }
+}
+
+function setDatasetLimit(name: string, limit: number | undefined) {
+  const ref = refOf(name)
+  if (!ref) return
+  ref.limit = limit && limit > 0 ? limit : 0
+}
+
+/**
+ * 每个步骤能看到的「已定义变量」集合（M3 ③-c 4.3 变量依赖提示）。
+ *
+ * 累积规则（与引擎运行时作用域一致）：
+ *   - config.variables（用例级变量）对所有步骤可见；
+ *   - 每个步骤自己的 variables（步骤级）对本步骤可见；
+ *   - 前面**启用**步骤的 extract 变量名，对后续步骤可见。
+ *
+ * 返回数组，下标对齐 steps 的下标（禁用步骤也占位，但它的 extract 不计入后续）。
+ */
+const definedVarsByStep = computed(() => {
+  const configVars = new Set(form.configVariables.map((r) => r.key.trim()).filter(Boolean))
+  // 已引用数据集的列名 = 运行时参数化注入的变量，引用它们不算未定义。
+  const paramCols = new Set<string>()
+  for (const ref of form.datasets) {
+    const ds = datasets.value.find((d) => d.name === ref.name)
+    if (ds) for (const c of ds.columns) paramCols.add(c)
+  }
+  const result: string[][] = steps.value.map(() => [])
+  // 累积前置步骤（按数组顺序 = 执行顺序）的 extract 变量名
+  const accumulated = new Set<string>([...configVars, ...paramCols])
+  steps.value.forEach((step, i) => {
+    // 本步骤可见 = 累积到的（含 config + 参数化列 + 前置启用步骤的 extract）+ 本步骤自己的 variables
+    const visible = new Set(accumulated)
+    step.variables.forEach((r) => {
+      const k = r.key.trim()
+      if (k) visible.add(k)
+    })
+    result[i] = [...visible]
+    // 本步骤 extract 只有在**启用**时才产生变量，供后续步骤使用
+    if (step.enabled) {
+      step.extract.forEach((e) => {
+        const n = e.name.trim()
+        if (n) accumulated.add(n)
+      })
+    }
+  })
+  return result
+})
+
 onMounted(async () => {
   if (!projects.loaded) await projects.fetchList()
-  await Promise.all([load(), loadModules()])
+  await Promise.all([load(), loadModules(), loadDatasets()])
 })
 </script>
 
@@ -572,6 +743,51 @@ onMounted(async () => {
               <div class="hrp-muted note">导出到后续用例集执行时可见的变量名。M1 单用例执行用不到，留作准备。</div>
             </el-tab-pane>
 
+            <el-tab-pane label="数据集">
+              <div v-if="datasets.length === 0" class="hrp-muted note">
+                当前项目还没有数据集。去「参数化数据集」页新建，再回来勾选。
+              </div>
+              <template v-else>
+                <div
+                  v-for="ds in datasets"
+                  :key="ds.id"
+                  class="dataset-row"
+                  :class="{ 'is-checked': !!refOf(ds.name) }"
+                >
+                  <el-checkbox
+                    :model-value="!!refOf(ds.name)"
+                    @change="toggleDataset(ds)"
+                  >
+                    <span class="hrp-mono">{{ ds.name }}</span>
+                    <el-tag
+                      size="small"
+                      :type="ds.source === 'csv' ? 'warning' : 'primary'"
+                      effect="plain"
+                      class="ds-tag"
+                    >
+                      {{ ds.source === 'csv' ? 'CSV' : 'List' }}
+                    </el-tag>
+                    <span class="hrp-muted ds-meta">{{ ds.row_count }} 行 · 实际 {{ ds.limit_effective }} 次</span>
+                  </el-checkbox>
+                  <div v-if="refOf(ds.name)" class="dataset-limit">
+                    <span class="hrp-muted">覆盖迭代上限：</span>
+                    <el-input-number
+                      :model-value="refOf(ds.name)!.limit"
+                      :min="0"
+                      :max="100000"
+                      size="small"
+                      style="width: 130px"
+                      @update:model-value="setDatasetLimit(ds.name, $event)"
+                    />
+                    <span class="hrp-muted">0 = 用数据集默认（{{ ds.limit > 0 ? ds.limit : '全部' }}）</span>
+                  </div>
+                </div>
+              </template>
+              <div class="hrp-muted note">
+                勾选后，用例会按数据行数迭代执行；每个字段以 <code>$字段名</code> 在步骤里引用。
+              </div>
+            </el-tab-pane>
+
             <el-tab-pane label="请求头">
               <KeyValueEditor v-model="form.configHeaders" key-placeholder="Header 名" />
               <div class="hrp-muted note">
@@ -622,9 +838,11 @@ onMounted(async () => {
             :step="step"
             :index="i"
             :total="steps.length"
+            :defined-vars="definedVarsByStep[i]"
             @remove="removeStep"
             @duplicate="duplicateStep"
             @move="moveStep"
+            @debug="debugStep"
           />
         </el-card>
       </div>
@@ -651,10 +869,20 @@ onMounted(async () => {
             </el-tab-pane>
 
             <el-tab-pane label="编译后 YAML" name="yaml">
-              <YamlPreview :preview="preview" :loading="previewLoading" :error="previewError" />
+              <YamlPreview
+                :preview="preview"
+                :loading="previewLoading"
+                :error="previewError"
+                :case-id="caseId"
+                @saved="onYamlSaved"
+              />
               <el-button v-if="isEdit" class="side-btn" size="small" :loading="previewLoading" @click="refreshPreview">
                 重新编译
               </el-button>
+            </el-tab-pane>
+
+            <el-tab-pane label="调试" name="debug">
+              <DebugPanel :result="debugResult" :loading="debugLoading" :error="debugError" />
             </el-tab-pane>
           </el-tabs>
         </el-card>
@@ -733,5 +961,35 @@ onMounted(async () => {
 
 .side-btn {
   margin-top: 8px;
+}
+
+.dataset-row {
+  padding: 8px 10px;
+  border: 1px solid var(--hrp-border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.dataset-row.is-checked {
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-5);
+}
+
+.ds-tag {
+  margin: 0 6px;
+}
+
+.ds-meta {
+  font-size: 12px;
+}
+
+.dataset-limit {
+  margin-top: 4px;
+  padding-left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
 }
 </style>

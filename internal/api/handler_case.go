@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/service"
@@ -146,6 +148,34 @@ func (h *caseHandler) YAML(c *gin.Context) {
 		return
 	}
 	OK(c, preview)
+}
+
+// SaveYAML 保存源码视图里编辑过的 YAML（M3 ③-c 4.2）。
+//
+// 请求体是 { yaml: string }。反解析失败返回 50003，data 带行号信息
+// （decompiler.LineError），前端据此高亮报错行。
+func (h *caseHandler) SaveYAML(c *gin.Context) {
+	id, ok := ParseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req struct {
+		YAML string `json:"yaml"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, response.CodeBadParam, "请求体非法："+err.Error())
+		return
+	}
+	if strings.TrimSpace(req.YAML) == "" {
+		Fail(c, response.CodeBadParam, "YAML 内容不能为空")
+		return
+	}
+	detail, err := h.svc.SaveYAML(id, req.YAML)
+	if err != nil {
+		WriteError(c, err)
+		return
+	}
+	OK(c, detail)
 }
 
 // Validate 执行静态校验，不调用引擎。

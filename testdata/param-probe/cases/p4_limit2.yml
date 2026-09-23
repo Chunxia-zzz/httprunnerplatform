@@ -1,0 +1,17 @@
+config:
+    name: "PARAM-csv-limit2"
+    verify: false
+    parameters:
+        - parameterize: data/users.csv
+      # limit 无法在 YAML 表达 —— 探针目的：确认多条 csv 是否全迭代
+
+teststeps:
+    -
+        name: "查用户"
+        request:
+            method: GET
+            url: "http://127.0.0.1:8899/get"
+            params:
+                u: "$username"
+        validate:
+            - eq: ["status_code", 200]

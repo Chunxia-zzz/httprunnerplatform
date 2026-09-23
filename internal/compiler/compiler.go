@@ -42,6 +42,17 @@ type Input struct {
 	Project *model.Project
 	Env     *model.Environment
 	Cases   []CaseSpec
+	// WorkspaceRoot 是项目持久工作区的绝对路径（M3 参数化需要）。
+	//
+	// 只有 CSV 数据集的列名读取与 limit 派生文件生成会用到：
+	// CSV 内容以**项目工作区里的文件**为真源，编译期读取它来生成参数键
+	// 与派生文件。空值 + 无 CSV 引用时可以不传。
+	WorkspaceRoot string
+	// Datasets 是本项目全部参数化数据集，按名称索引（M3 参数化）。
+	//
+	// 由调用方（service 层）在编译前一次性查好传入：compiler 是纯函数包，
+	// 不查库。引用了不存在的数据集时渲染会直接报错（resolveParameters）。
+	Datasets map[string]*model.ParamDataset
 }
 
 // CompiledCase 是单个用例的编译产物。
@@ -56,6 +67,11 @@ type CompiledCase struct {
 	YAML string
 	// Steps 是给解析器用的声明快照（顺序与 YAML 中的 teststeps 一致）。
 	Steps []StepDecl
+	// ExtraFiles 是本用例引出的**额外编译产物**（M3 参数化：limit 裁剪后的派生 CSV）。
+	//
+	// 键是工作区内的相对路径（形如 data/users__l2.csv），值是文件内容。
+	// 与 YAML 同理是可再生成的产物：DB 里的数据集定义才是唯一真源。
+	ExtraFiles map[string]string
 }
 
 // StepDecl 是编译期确定的步骤声明，供解析器对齐引擎事件。
@@ -100,6 +116,17 @@ func Compile(in *Input, workspaceRoot string) (*Output, error) {
 		abs := filepath.Join(workspaceRoot, filepath.FromSlash(c.FileName))
 		if err := os.WriteFile(abs, []byte(c.YAML), 0o644); err != nil {
 			return nil, fmt.Errorf("写入用例文件 %s 失败: %w", c.FileName, err)
+		}
+		// 参数化派生文件（limit 裁剪版 CSV 等）。同一文件可能被多个用例引用，
+		// 内容由同一份数据集定义生成，重复写结果幂等。
+		for rel, content := range c.ExtraFiles {
+			p := filepath.Join(workspaceRoot, filepath.FromSlash(rel))
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				return nil, fmt.Errorf("创建数据目录失败: %w", err)
+			}
+			if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+				return nil, fmt.Errorf("写入参数化文件 %s 失败: %w", rel, err)
+			}
 		}
 	}
 	return out, nil
@@ -216,6 +243,16 @@ func renderCase(in *Input, spec CaseSpec) (*CompiledCase, error) {
 		return nil, fmt.Errorf("用例 %s 没有任何启用的步骤，无法编译", tc.Code)
 	}
 
+	// 参数化：把用例 config.datasets 里的数据集引用展开成引擎语法。
+	refs, err := datasetRefsOf(tc)
+	if err != nil {
+		return nil, fmt.Errorf("用例 %s 的参数化配置: %w", tc.Code, err)
+	}
+	extra, err := resolveParameters(in, refs, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("用例 %s 的参数化配置: %w", tc.Code, err)
+	}
+
 	doc := yamlTestCase{
 		Config:    cfg,
 		TestSteps: make([]yamlTestStep, 0, len(steps)),
@@ -243,6 +280,7 @@ func renderCase(in *Input, spec CaseSpec) (*CompiledCase, error) {
 		FileName:   DirTestcases + "/" + tc.Code + ".yaml",
 		YAML:       body,
 		Steps:      decls,
+		ExtraFiles: extra,
 	}, nil
 }
 

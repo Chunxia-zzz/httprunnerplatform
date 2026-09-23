@@ -14,20 +14,53 @@ import ExtractEditor from '@/components/ExtractEditor.vue'
 import KeyValueEditor from '@/components/KeyValueEditor.vue'
 import { willAppendTrailingSlash, type EditorStep } from '@/types/editor'
 import { HTTP_METHODS } from '@/utils/dict'
+import { undefinedRefs } from '@/utils/variables'
 
 const props = defineProps<{
   step: EditorStep
   index: number
   total: number
+  /** 本步骤可见的已定义变量集合（M3 ③-c 4.3），由父组件跨步骤计算 */
+  definedVars?: string[]
 }>()
 
 const emit = defineEmits<{
   (e: 'remove', index: number): void
   (e: 'duplicate', index: number): void
   (e: 'move', payload: { from: number; to: number }): void
+  (e: 'debug', index: number): void
 }>()
 
 const slashWarning = computed(() => willAppendTrailingSlash(props.step.url, props.step.params))
+
+/**
+ * 本步骤引用了但未定义的变量（M3 ③-c 4.3）。
+ *
+ * 检查范围：URL、请求头值、查询参数值、请求体（json/raw 文本 + form 值）。
+ * 步骤级变量（variables 的 value）里引用 $ 也算，但变量名本身不算引用。
+ * 未定义 = 不在「前置步骤 extract + config.variables + 本步骤 variables」里。
+ */
+const undefinedVars = computed(() => {
+  if (!props.definedVars) return []
+  const defined = new Set(props.definedVars)
+
+  const texts: string[] = [props.step.url]
+  // 请求头 / 查询参数的 value 可能引用变量
+  for (const r of props.step.headers) texts.push(r.value)
+  for (const r of props.step.params) texts.push(r.value)
+  for (const r of props.step.bodyForm) texts.push(r.value)
+  for (const r of props.step.variables) texts.push(r.value)
+  if (props.step.bodyType === 'json') texts.push(props.step.bodyJson)
+  if (props.step.bodyType === 'raw') texts.push(props.step.bodyRaw)
+
+  const found = new Set<string>()
+  for (const t of texts) {
+    for (const name of undefinedRefs(t, defined)) {
+      found.add(name)
+    }
+  }
+  return [...found]
+})
 
 /** requested 状态：JSON 文本是否可以解析。用来在保存前拦住低级错误。 */
 const jsonError = computed(() => {
@@ -78,6 +111,7 @@ function formatJson() {
         </span>
       </div>
       <div class="step__actions">
+        <el-button link :disabled="!step.enabled" @click="emit('debug', index)">调试此步</el-button>
         <el-button link :disabled="index === 0" @click="emit('move', { from: index, to: index - 1 })">
           <el-icon><Top /></el-icon>
         </el-button>
@@ -105,6 +139,24 @@ function formatJson() {
       URL 不带查询串时，引擎会在发出前补一个 <code>/</code>：`$base_url/get` 实际请求的是
       <code>GET /get/</code>。这个行为无法用改写 YAML 绕开（实测 A1），修法是让 URL 带上真实查询串
       （加一个参数即可）。最终生效地址以执行详情里的「最终 URL」为准。
+    </el-alert>
+
+    <el-alert v-if="undefinedVars.length" type="error" show-icon :closable="false" class="step__alert">
+      <template #title>引用了未定义的变量</template>
+      <template #default>
+        本步骤引用了这些变量，但它们既不在「用例变量」里，也不是前面步骤提取的：
+        <el-tag
+          v-for="v in undefinedVars"
+          :key="v"
+          size="small"
+          type="danger"
+          effect="plain"
+          class="undef-tag"
+        >
+          <code>${{ v }}</code>
+        </el-tag>
+        。未定义变量会导致引擎退出码 21（用例问题）。若它由「环境变量」提供，可忽略此提示（保存并校验会给权威结论）。
+      </template>
     </el-alert>
 
     <el-tabs class="step__tabs">
@@ -259,5 +311,9 @@ function formatJson() {
 .body-error {
   color: var(--el-color-danger);
   font-size: 12px;
+}
+
+.undef-tag {
+  margin: 0 4px;
 }
 </style>

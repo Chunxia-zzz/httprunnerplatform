@@ -113,6 +113,20 @@
       明文只在签发弹窗出现、未复制关窗弹二次确认、已复制关窗直接关、列表只有 prefix、吊销即移除
     - （headless 里 `navigator.clipboard` 默认被拒，脚本注入 stub 验证「复制成功后不再确认」的产品逻辑；
       剪贴板权限本身是环境，不是被测对象）
+- ✅ **M3 调试与数据驱动（③ 三片全部落地）**
+  - 设计已定稿：[docs/M3调试体验设计.md](docs/M3调试体验设计.md)
+  - ✅ **③-a 单步调试**：`internal/service/debug.go`（临时最小用例，跑完即弃）+ `POST /cases/{id}/debug` + 前端 `DebugPanel.vue`
+    - 引擎最小执行单位是用例文件（实测 A2），平台构造「前置步骤 + 目标步」的最小用例，真实执行前置步骤拿真实变量值
+    - 验收：smoke-debug 14 项 + CDP [`scripts/ui/debug-smoke.mjs`](scripts/ui/debug-smoke.mjs) 11 项全绿（含变量依赖验证）
+  - ✅ **③-b 参数化**：`internal/service/param.go` + `compiler/parameters.go` + `POST /projects/{id}/datasets` 等 6 个端点 + 前端 `ParamListView.vue`
+    - 平台层格式 `config.datasets = [{name, limit}]`，编译时转引擎语法；CSV 存项目工作区，limit 编译期裁剪
+    - ⭐ 关键实测（A22）：`- parameterize: file.csv` 写法 v4.3.6 **静默丢弃**；正确写法是 `col1-col2: "${P(data/xxx.csv)}"`；关联参数成对迭代（非笛卡尔积）
+    - 验收：compiler 15 项单测 + smoke-param 28 项 + CDP [`scripts/ui/param-smoke.mjs`](scripts/ui/param-smoke.mjs) 16 项全绿（CSV 3 行 → 3 次迭代）
+  - ✅ **③-c 断言配置器 + 源码可编辑 + 变量依赖**
+    - 断言配置器 M1 已实现（下拉 + 类型推断 + 编译预览），③-c 仅验收
+    - 源码可编辑：`internal/decompiler/`（YAML → CaseReq 反解析）+ `PUT /cases/{id}/yaml`；反解析失败带行号、前端红标高亮
+    - 变量依赖：前端 `utils/variables.ts` 三件套（`$name` / `${}` 边界 / `$$` 转义）+ 跨步骤作用域 + 未定义标红；后端 validator 的 `UNDEFINED_VARIABLE` 兜底
+    - 验收：decompiler 8 项单测 + smoke-yaml-save 11 项 + CDP [`scripts/ui/m3c-smoke.mjs`](scripts/ui/m3c-smoke.mjs) 9 项全绿
 
 ## 快速开始（单文件交付）
 

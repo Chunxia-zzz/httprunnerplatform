@@ -75,6 +75,8 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerProjectRoutes(authed, deps)
 		registerEnvironmentRoutes(authed, deps)
 		registerCaseRoutes(authed, deps)
+		registerDebugRoutes(authed, deps)
+		registerParamRoutes(authed, deps)
 		registerSuiteRoutes(authed, deps)
 		registerPlanRoutes(authed, deps)
 		registerRunRoutes(authed, deps)
@@ -144,7 +146,33 @@ func registerCaseRoutes(g *gin.RouterGroup, deps *Deps) {
 	g.PUT("/cases/:id", h.Update)
 	g.DELETE("/cases/:id", h.Delete)
 	g.GET("/cases/:id/yaml", h.YAML)
+	g.PUT("/cases/:id/yaml", h.SaveYAML)
 	g.POST("/cases/:id/validate", h.Validate)
+}
+
+// registerDebugRoutes 注册单步调试路由。
+//
+// 挂在用例 ID 之下（/cases/{id}/debug）：调试的对象是"某条用例的某一步"，
+// 语义上属于用例的子资源，与「执行」（/runs）是两回事——执行会落库、进历史，
+// 调试是跑完即弃的临时动作。
+func registerDebugRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newDebugHandler(deps)
+	g.POST("/cases/:id/debug", h.DebugStep)
+}
+
+// registerParamRoutes 注册参数化数据集路由（M3）。
+//
+// 与用例集同一套路：「列举/新建」挂在项目路径下，「读取/修改/删除/CSV 内容」
+// 直接用数据集 ID。
+func registerParamRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newParamHandler(deps)
+	g.GET("/projects/:id/datasets", h.List)
+	g.POST("/projects/:id/datasets", h.Create)
+
+	g.GET("/datasets/:id", h.Get)
+	g.PUT("/datasets/:id", h.Update)
+	g.DELETE("/datasets/:id", h.Delete)
+	g.GET("/datasets/:id/csv", h.CsvText)
 }
 
 // registerSuiteRoutes 注册用例集相关路由。

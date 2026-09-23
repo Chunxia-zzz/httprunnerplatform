@@ -23,6 +23,7 @@ const projects = useProjectStore()
  */
 const ALL_NAV = [
   { name: 'cases', label: '用例管理', icon: 'Document', admin: false },
+  { name: 'datasets', label: '参数化数据集', icon: 'Grid', admin: false },
   { name: 'suites', label: '用例集', icon: 'Files', admin: false },
   { name: 'plans', label: '测试计划', icon: 'Timer', admin: false },
   { name: 'runs', label: '执行记录', icon: 'VideoPlay', admin: false },

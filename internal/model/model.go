@@ -73,6 +73,15 @@ const (
 	TriggerCI     = "ci"
 )
 
+// 参数化数据集（M3）。
+const (
+	ParamSourceList = "list"
+	ParamSourceCSV  = "csv"
+
+	// 引擎只支持顺序迭代（实测 A22：没有 random/unique 开关），平台只开放这一档。
+	ParamStrategySequential = "sequential"
+)
+
 // 执行状态。
 //
 // StatusError 表示"平台/环境层面的失败"，区别于 StatusFailed（有用例失败）。

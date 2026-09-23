@@ -1,0 +1,18 @@
+config:
+    name: "PARAM-cartesian-2x2"
+    verify: false
+    parameters:
+        a: ["x", "y"]
+        b: ["1", "2"]
+
+teststeps:
+    -
+        name: "请求"
+        request:
+            method: GET
+            url: "http://127.0.0.1:8899/get"
+            params:
+                a: "$a"
+                b: "$b"
+        validate:
+            - eq: ["status_code", 200]

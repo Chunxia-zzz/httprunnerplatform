@@ -250,10 +250,17 @@ func (s *RunService) execute(ctx context.Context, job *runJob) {
 		return
 	}
 	projectWS := projectWorkspace(s.Cfg, job.project)
+	datasets, err := loadDatasets(s.DB, job.project.ID)
+	if err != nil {
+		s.finish(job, err.Error(), model.RunError, started)
+		return
+	}
 	comp, err := compiler.Compile(&compiler.Input{
-		Project: job.project,
-		Env:     job.env,
-		Cases:   []compiler.CaseSpec{{Case: job.tc, Steps: steps}},
+		Project:       job.project,
+		Env:           job.env,
+		Cases:         []compiler.CaseSpec{{Case: job.tc, Steps: steps}},
+		WorkspaceRoot: projectWS,
+		Datasets:      datasets,
 	}, projectWS)
 	if err != nil {
 		s.finish(job, "编译失败："+err.Error(), model.RunError, started)
