@@ -13,6 +13,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElTree } from 'element-plus'
 
 import { caseApi, environmentApi, runApi, type CaseListItem, type CaseListQuery, type ModuleCount } from '@/api'
+import ImportDialog from '@/components/ImportDialog.vue'
+import BaselineDialog from '@/components/BaselineDialog.vue'
 import { useProjectStore } from '@/stores/project'
 import { caseStatusMeta, priorityMeta, stepStatusMeta } from '@/utils/dict'
 import { formatTime } from '@/utils/format'
@@ -199,6 +201,21 @@ watch(projectId, () => {
   activeModule.value = ''
   void reload()
 })
+
+/** 导入对话框：导入成功后刷新列表。 */
+const importVisible = ref(false)
+function onImported(count: number) {
+  if (count > 0) void reload()
+}
+
+/** 基线对比对话框：选定用例，看最近 N 次执行的并排对比。 */
+const baselineVisible = ref(false)
+const baselineTarget = ref<{ id: number; name: string; code: string } | null>(null)
+function openBaseline(row: unknown) {
+  const item = asCase(row)
+  baselineTarget.value = { id: item.id, name: item.name, code: item.code }
+  baselineVisible.value = true
+}
 </script>
 
 <template>
@@ -210,9 +227,14 @@ watch(projectId, () => {
           表单化编辑，保存时编译成 hrp 用例；执行时一个用例一个独立子进程（断言失败会 panic，目录模式会丢整批结果）。
         </p>
       </div>
-      <el-button type="primary" :disabled="!projectId" @click="goNew">
-        <el-icon><Plus /></el-icon>新建用例
-      </el-button>
+      <div class="hrp-page__actions">
+        <el-button :disabled="!projectId" @click="importVisible = true">
+          <el-icon><Upload /></el-icon>导入用例
+        </el-button>
+        <el-button type="primary" :disabled="!projectId" @click="goNew">
+          <el-icon><Plus /></el-icon>新建用例
+        </el-button>
+      </div>
     </div>
 
     <el-empty v-if="!projectId" description="请先在顶栏选择项目" />
@@ -324,9 +346,10 @@ watch(projectId, () => {
           <el-table-column label="更新时间" width="170">
             <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="190" fixed="right">
+          <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" :loading="runningId === row.id" @click="runCase(row)">执行</el-button>
+              <el-button link type="primary" @click="openBaseline(row)">对比</el-button>
               <el-button link type="primary" @click="goEdit(row)">编辑</el-button>
               <el-button link type="danger" @click="removeCase(row)">删除</el-button>
             </template>
@@ -345,6 +368,14 @@ watch(projectId, () => {
         />
       </el-card>
     </div>
+
+    <ImportDialog v-model="importVisible" @imported="onImported" />
+    <BaselineDialog
+      v-model="baselineVisible"
+      :case-id="baselineTarget?.id ?? 0"
+      :case-name="baselineTarget?.name"
+      :case-code="baselineTarget?.code"
+    />
   </div>
 </template>
 

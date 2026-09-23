@@ -80,6 +80,10 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerSuiteRoutes(authed, deps)
 		registerPlanRoutes(authed, deps)
 		registerRunRoutes(authed, deps)
+		registerStatsRoutes(authed, deps)
+		registerImportRoutes(authed, deps)
+		registerExportRoutes(authed, deps)
+		registerBaselineRoutes(authed, deps)
 		registerUserRoutes(authed, deps)
 		registerTokenRoutes(authed, deps)
 	}
@@ -239,6 +243,39 @@ func registerRunRoutes(g *gin.RouterGroup, deps *Deps) {
 	g.POST("/runs/:id/cancel", h.Cancel)
 	g.GET("/runs/:id/report", h.Report)
 	g.GET("/runs/:id/logs", h.Logs)
+}
+
+// registerStatsRoutes 注册统计看板路由（M4）。
+func registerStatsRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newStatsHandler(deps)
+	g.GET("/stats/trend", h.Trend)
+	g.GET("/stats/flaky", h.Flaky)
+	g.GET("/stats/slowest", h.Slowest)
+}
+
+// registerImportRoutes 注册导入路由（M4）。
+//
+// 挂在项目 ID 之下：导入的用例落进哪个项目由路径决定，
+// 与 POST /projects/:id/cases 的归属语义一致。
+func registerImportRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newImportHandler(deps)
+	g.POST("/projects/:id/import/preview", h.Preview)
+	g.POST("/projects/:id/import/commit", h.Commit)
+}
+
+// registerExportRoutes 注册导出路由（M4）。
+func registerExportRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newExportHandler(deps)
+	g.GET("/projects/:id/export", h.Download)
+}
+
+// registerBaselineRoutes 注册用例基线对比路由（M4-d）。
+//
+// 挂在项目 ID 之下：对比的是「某项目里某条用例」的历史执行，
+// 与统计看板（/stats）同属只读分析能力，但对象是单条用例而非全项目。
+func registerBaselineRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newBaselineHandler(deps)
+	g.GET("/projects/:id/baseline", h.Baseline)
 }
 
 // noRouteHandler 处理所有没有匹配到路由的请求。

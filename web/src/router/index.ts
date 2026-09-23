@@ -82,6 +82,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '执行记录' },
       },
       {
+        // 统计看板（M4）：读执行历史，挂在执行记录之后。
+        path: 'stats',
+        name: 'stats',
+        component: () => import('@/views/StatsDashboardView.vue'),
+        meta: { title: '统计看板' },
+      },
+      {
         path: 'runs/:id(\\d+)',
         name: 'run-detail',
         component: () => import('@/views/RunDetailView.vue'),

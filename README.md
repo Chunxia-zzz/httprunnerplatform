@@ -127,6 +127,24 @@
     - 源码可编辑：`internal/decompiler/`（YAML → CaseReq 反解析）+ `PUT /cases/{id}/yaml`；反解析失败带行号、前端红标高亮
     - 变量依赖：前端 `utils/variables.ts` 三件套（`$name` / `${}` 边界 / `$$` 转义）+ 跨步骤作用域 + 未定义标红；后端 validator 的 `UNDEFINED_VARIABLE` 兜底
     - 验收：decompiler 8 项单测 + smoke-yaml-save 11 项 + CDP [`scripts/ui/m3c-smoke.mjs`](scripts/ui/m3c-smoke.mjs) 9 项全绿
+- ✅ **M4 体验与扩展（四块全部落地）**
+  - ✅ **M4-a 统计看板**：`internal/service/stats.go` + `GET /stats/{trend,flaky,slowest}` + 前端 `StatsDashboardView.vue`（ECharts 按需引入，路由懒加载隔离 592KB chunk 不污染首屏）
+    - 通过率趋势（按天补零）、不稳定用例排行（rate 分档着色）、慢用例排行
+    - 聚合放在 Go 内存做（跨 mysql/sqlite 驱动一致）；「先取 run_id 集合再聚合 case_result」避免无外键 JOIN 漏行
+    - 验收：4 项单测 + CDP [`scripts/ui/stats-smoke.mjs`](scripts/ui/stats-smoke.mjs) 11 项全绿
+  - ✅ **M4-b 导入**：`internal/service/importsvc.go` + `POST /projects/{id}/import/{preview,commit}` + 前端 `ImportDialog.vue`
+    - 走 `hrp convert --to-yaml` 真实转换（HAR / Postman / curl 自动识别 + 扩展名兜底），decompiler 扩展支持字典形态断言
+    - 两段式（预览 → 确认导入），name/code 自动去重，逐用例成败报告不做整体回滚
+    - ⭐ 实测（A23）：`-d` 输出目录必须预建、GA4 遥测每次拖 5s（给 60s 兜底）、HAR 的 validate 是字典形态
+    - 验收：15+ 项单测 + [`scripts/smoke-import.mjs`](scripts/smoke-import.mjs) 20 项全绿
+  - ✅ **M4-c 导出**：`internal/service/exportsvc.go` + `GET /projects/{id}/export` + 前端「导出」按钮
+    - 走 `compiler.Render` 纯渲染（不落盘、只读、永远反映 DB 当前内容），单用例失败写 README 不阻断整体
+    - 返回 `application/zip` 二进制流 + 附件名；失败返回统一 JSON，前端按 Content-Type 区分
+    - 验收：3 项单测 + [`scripts/smoke-export.mjs`](scripts/smoke-export.mjs) 8 项全绿
+  - ✅ **M4-d 基线对比**：`internal/service/baseline.go` + `GET /projects/{id}/baseline` + 前端 `BaselineDialog.vue`
+    - 选定用例拉取最近 N 次执行并排对比（状态/归因/耗时/步骤失败数），相邻差异信号（broke / recovered / 耗时差）由后端给「事实」、前端可视化
+    - 复用现有 run_record + case_result + step_result 历史，**不新增表**；「先取 run 再批量补步骤数」避免 N+1
+    - 验收：6 项单测 + [`scripts/smoke-baseline.mjs`](scripts/smoke-baseline.mjs) 9 项全绿
 
 ## 快速开始（单文件交付）
 

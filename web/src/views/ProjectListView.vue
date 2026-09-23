@@ -146,6 +146,21 @@ function enter(row: unknown) {
   void router.push({ name: 'cases' })
 }
 
+/** 导出项目为 hrp 标准目录 zip（M4）。 */
+const exportingId = ref(0)
+async function exportRow(row: unknown) {
+  const p = asProject(row)
+  exportingId.value = p.id
+  try {
+    await projectApi.exportProject(p.id)
+    notifyOk('导出包已开始下载')
+  } catch (e) {
+    notifyError(e, '导出失败')
+  } finally {
+    exportingId.value = 0
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -208,6 +223,7 @@ onMounted(load)
           <template #default="{ row }">
             <el-button link type="primary" @click="enter(row)">进入</el-button>
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button link type="primary" :loading="exportingId === row.id" @click="exportRow(row)">导出</el-button>
             <!--
               删除项目会连带环境与用例，破坏性最大，后端已收紧为管理员专属。
               非管理员这里直接给出不可点的按钮 + 原因，而不是让他点下去收 40300。

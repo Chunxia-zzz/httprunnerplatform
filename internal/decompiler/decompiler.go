@@ -79,6 +79,7 @@ type AssertItem struct {
 	Check  string `json:"check"`
 	Assert string `json:"assert"`
 	Expect any    `json:"expect,omitempty"`
+	Msg    string `json:"msg,omitempty"`
 }
 
 // LineError 是带行号的解析错误，供前端高亮定位。
@@ -315,13 +316,52 @@ func parseValidate(n *yaml.Node, st *StepReq) error {
 		if item.Kind != yaml.MappingNode || len(item.Content) < 2 {
 			return &LineError{Line: item.Line, Message: "每条断言必须是「方法: [检查表达式, 期望值]」的单键映射"}
 		}
-		method := item.Content[0].Value
+
+		// 两种形态（实测 A23）：
+		//   紧凑（平台渲染）：- eq: [status_code, 200]        → 单键映射
+		//   字典（hrp convert）：- {check: ..., assert: equals, expect: ..., msg: ...}
+		// 用「同时含 check 与 assert 键」区分 —— check/assert 都不是合法的
+		// 校验器方法名，同时出现只可能是字典形态，不会误伤紧凑写法。
+		var check, method, msg string
+		var expect any
+		hasCheck, hasAssert := false, false
+		for i := 0; i+1 < len(item.Content); i += 2 {
+			switch item.Content[i].Value {
+			case "check":
+				hasCheck = true
+			case "assert":
+				hasAssert = true
+			}
+		}
+
+		if hasCheck && hasAssert {
+			for i := 0; i+1 < len(item.Content); i += 2 {
+				key := item.Content[i].Value
+				val := item.Content[i+1]
+				switch key {
+				case "check":
+					check = scalarString(val)
+				case "assert":
+					method = scalarString(val)
+				case "expect":
+					expect = nodeToAny(val)
+				case "msg":
+					msg = scalarString(val)
+				}
+			}
+			if method == "" {
+				return &LineError{Line: item.Line, Message: "字典形态的断言缺少 assert 方法名"}
+			}
+			st.Validate = append(st.Validate, AssertItem{Check: check, Assert: method, Expect: expect, Msg: msg})
+			continue
+		}
+
+		method = item.Content[0].Value
 		args := item.Content[1]
 		if args.Kind != yaml.SequenceNode || len(args.Content) < 1 || len(args.Content) > 2 {
 			return &LineError{Line: item.Line, Message: fmt.Sprintf("断言 %q 的参数必须是 [检查表达式, 期望值]（1~2 个元素）", method)}
 		}
-		check := scalarString(args.Content[0])
-		var expect any
+		check = scalarString(args.Content[0])
 		if len(args.Content) == 2 {
 			expect = nodeToAny(args.Content[1])
 		}

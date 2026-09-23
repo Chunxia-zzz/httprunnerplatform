@@ -10,6 +10,9 @@ export * as runApi from './run'
 export * as engineApi from './engine'
 export * as userApi from './user'
 export * as paramApi from './param'
+export * as statsApi from './stats'
+export * as importApi from './import'
+export * as baselineApi from './baseline'
 
 // ---------------------------------------------------------------------------
 // 逐个透出子模块里的**具名导出**。
@@ -23,4 +26,5 @@ export { ISSUE_CODE_HINT } from './case'
 export { MASKED_VALUE } from './environment'
 export { fetchReport, isTerminalRun } from './run'
 export type { ReportResult } from './run'
+export type { ImportedCase } from './import'
 

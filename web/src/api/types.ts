@@ -839,3 +839,91 @@ export interface DebugStepResult {
   actual_step_count: number
   compile_error?: string
 }
+
+// ---------------------------------------------------------------------------
+// 统计看板（M4）
+// ---------------------------------------------------------------------------
+
+/** 通过率趋势上的一个点（按天）。 */
+export interface TrendPoint {
+  day: string
+  total: number
+  passed: number
+  failed: number
+  error: number
+  rate: number
+  avg_ms: number
+}
+
+/** 不稳定/常败用例排行项。 */
+export interface FlakyCase {
+  case_id: number
+  case_code: string
+  config_name: string
+  runs: number
+  passed: number
+  rate: number
+}
+
+/** 慢用例排行项。 */
+export interface SlowCase {
+  case_id: number
+  case_code: string
+  config_name: string
+  runs: number
+  avg_ms: number
+  max_ms: number
+}
+
+/** 统计查询参数。 */
+export interface StatsQuery {
+  project_id: number
+  days?: number
+  limit?: number
+}
+
+// ---------------------------------------------------------------------------
+// 用例基线对比（M4-d）
+// ---------------------------------------------------------------------------
+
+/** 相邻两次执行之间的差异信号。第 0 项（最早）无 delta。 */
+export interface BaselineDelta {
+  /** 前一次通过、这一次失败/出错 —— 典型的最先变坏点 */
+  broke: boolean
+  /** 前一次失败/出错、这一次通过 */
+  recovered: boolean
+  /** 本次耗时 - 上次耗时（正数 = 变慢） */
+  dur_delta_ms: number
+  /** 本次通过步骤数 - 上次通过步骤数 */
+  step_pass_delta: number
+}
+
+/** 某一次执行里该用例的结果快照。 */
+export interface BaselineRun {
+  run_id: ID
+  /** 整次执行的终态（success/failed/error/canceled） */
+  run_status: string
+  trigger_type: string
+  /** RFC3339；空串 = 还在跑 */
+  finished_at: string
+  /** 该用例的结果状态（pass/fail/error/skipped） */
+  status: string
+  attribution: string
+  duration_ms: number
+  step_total: number
+  step_passed: number
+  step_failed: number
+  step_error: number
+  error_msg: string
+  delta?: BaselineDelta
+}
+
+/** 一次基线对比的完整返回。runs 按时间从旧到新。 */
+export interface BaselineResult {
+  case_id: ID
+  case_code: string
+  config_name: string
+  /** 该项目下该用例的历史执行总次数 */
+  total_runs: number
+  runs: BaselineRun[]
+}

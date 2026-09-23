@@ -48,14 +48,19 @@ type Set struct {
 	Debug       *DebugService
 	Param       *ParamService
 	User        *UserService
+	Stats       *StatsService
+	Import      *ImportService
+	Export      *ExportService
+	Baseline    *BaselineService
 }
 
 // New 构造全部 service。
 func New(d Deps) *Set {
+	caseSvc := &CaseService{Deps: d}
 	return &Set{
 		Project:     &ProjectService{Deps: d},
 		Environment: &EnvironmentService{Deps: d},
-		Case:        &CaseService{Deps: d},
+		Case:        caseSvc,
 		Suite:       &SuiteService{Deps: d},
 		Plan:        &PlanService{Deps: d},
 		Token:       &TokenService{Deps: d},
@@ -63,6 +68,10 @@ func New(d Deps) *Set {
 		Debug:       &DebugService{Deps: d},
 		Param:       &ParamService{Deps: d},
 		User:        &UserService{Deps: d},
+		Stats:       NewStatsService(d),
+		Import:      NewImportService(d, caseSvc),
+		Export:      NewExportService(d),
+		Baseline:    NewBaselineService(d),
 	}
 }
 
