@@ -102,12 +102,17 @@
     - ⭐ `exit_code_for_ci` 给 pipeline 一个数字（0/1/2），
       不给的话每条流水线都要写 jq 解析枚举，而且各人判断不一（有人把 error 当成功）
     - 单测 20 项；端到端冒烟 [`scripts/smoke-ci.mjs`](scripts/smoke-ci.mjs) **37 项全绿**
-  - ✅ 已完成：**编排层前端页面**（`vue-tsc` 与 `vite build` 均无错误）
+  - ✅ 已完成：**编排层前端页面 + 浏览器端到端验收**
     - 用例集页：成员顺序即执行顺序（↑↓ 调序 + 移出）、跑不了的成员在抽屉里标出原因
     - 测试计划页：cron + 中文说明 + 时区 + `next_fire_at`，跳过的调度点在列表上留痕（不补跑但看得见）
     - CI 令牌页：明文只显示一次 + 复制 + 关窗二次确认；页底给出可直接贴进流水线的 curl 示例
-    - ⏳ 浏览器端到端验收（`scripts/ui/orchestration-smoke.mjs`）尚未执行 —— 类型检查与构建已过，
-      真实浏览器交互留作下一轮
+    - 浏览器端到端 [`scripts/ui/orchestration-smoke.mjs`](scripts/ui/orchestration-smoke.mjs) **34 项全绿**：
+      ⭐ 成员勾选顺序即执行顺序（按 a/c/b 勾选后列表序完全一致，而非 ID 序）、
+      ↑ 调序生效、`case_count` 刷新、执行跳详情；
+      cron 中文说明 / 时区 / `next_fire_at`（工作日计划真的算到了下一个工作日 09:00）同列展示；
+      明文只在签发弹窗出现、未复制关窗弹二次确认、已复制关窗直接关、列表只有 prefix、吊销即移除
+    - （headless 里 `navigator.clipboard` 默认被拒，脚本注入 stub 验证「复制成功后不再确认」的产品逻辑；
+      剪贴板权限本身是环境，不是被测对象）
 
 ## 快速开始（单文件交付）
 
