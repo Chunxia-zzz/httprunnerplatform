@@ -4,6 +4,7 @@
 package model
 
 import (
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -165,9 +166,44 @@ func AttributionLabel(a string) string {
 //
 // 由服务端生成而非前端硬编码：归因规则来自引擎实测结论，
 // 集中在一处才不会被前端文案版本差异带偏。
+// AssertTotalUnknown 表示调用方未提供断言条数，理由文案退回通用表述。
+//
+// 用负数而非 0 作哨兵：0 是一个**有意义**的取值（该用例确实没写断言），
+// 两者给出的话术必须不同 —— 混在一起正是 BUG-004 的成因。
+const AssertTotalUnknown = -1
+
+// AttributionReason 返回归因的判断依据说明（不关心断言条数）。
+//
+// 保留这个重载是为了不打断既有调用点；能拿到断言条数的调用方应改用
+// AttributionReasonWith，否则「通过」分支无法区分 0 条断言与全部通过。
 func AttributionReason(a string) string {
+	return AttributionReasonWith(a, AssertTotalUnknown)
+}
+
+// AttributionReasonWith 返回归因的判断依据说明，并结合断言条数细化文案。
+//
+// 由服务端生成而非前端硬编码：归因规则来自引擎实测结论，
+// 集中在一处才不会被前端文案版本差异带偏。
+//
+// assertTotal 的三个取值域：
+//
+//	<0  未知（调用方没查）        → 通用文案
+//	=0  该用例确实没声明任何断言  → 必须与静态校验的 NO_VALIDATE 警告口径一致
+//	>0  声明的断言条数            → 给出具体条数
+//
+// 「0 条断言也算通过」这件事本身没有错（引擎确实正常跑完了），错的是把它
+// 表述成「全部断言通过」——那会让用户以为"验证过了"。平台在对应用例上给出的是
+// NO_VALIDATE 警告（「只能验证请求发得出去」），两处口径必须一致，
+// 否则用户会同时读到「全部断言通过」与「只能验证请求发得出去」两个矛盾结论。
+func AttributionReasonWith(a string, assertTotal int) string {
 	switch a {
 	case AttrPass:
+		if assertTotal == 0 {
+			return "用例执行成功，但这条用例没有声明任何断言 —— 只验证了「请求发得出去」，无法验证「结果对不对」。建议至少补一条断言（如 status_code）。"
+		}
+		if assertTotal > 0 {
+			return fmt.Sprintf("全部 %d 条断言通过", assertTotal)
+		}
 		return "全部断言通过"
 	case AttrSystemUnderTest:
 		return "断言未通过。引擎在断言失败时会 panic（实测 F8），因此退出码为 2 且不产出报告"
@@ -566,6 +602,12 @@ type StepResult struct {
 	Status           string    `gorm:"size:16;not null;default:'pending'" json:"status"`
 	InferredFailed   bool      `gorm:"not null" json:"inferred_failed"`
 	FinalURL         string    `gorm:"size:1024;not null;default:''" json:"final_url"`
+	// FinalURLSource 说明 FinalURL 的来源：summary（引擎权威）/ reconstructed（平台重建）。
+	//
+	// 与断言明细的 Rebuilt 是同一套「不假绿」原则：URL 在失败运行里同样是
+	// 平台拼出来的产物，界面上必须能区分「引擎给的」与「平台还原的」，
+	// 否则用户无从判断这个地址有多可信。
+	FinalURLSource   string    `gorm:"size:16;not null;default:''" json:"final_url_source"`
 	RequestSnapshot  jsonx.Any `gorm:"type:text" json:"request_snapshot"`
 	ResponseSnapshot jsonx.Any `gorm:"type:text" json:"response_snapshot"`
 	ElapsedMs        int64     `gorm:"not null;default:0" json:"elapsed_ms"`

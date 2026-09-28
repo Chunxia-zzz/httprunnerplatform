@@ -776,6 +776,18 @@ type CaseResultView struct {
 	// 刻意不加数据库列 —— 派生值一旦落库就有机会和明细不一致。
 	StepFailed int `json:"step_failed"`
 	StepError  int `json:"step_error"`
+
+	// AssertTotal 是这条用例实际落库的断言条数（同样是派生统计）。
+	//
+	// 之所以必须算出来而不是让前端数 assertions 数组：列表接口**刻意不带**
+	// 断言明细（体积原因，见 CaseStepsDetail 的注释），前端手上根本没有这个数。
+	AssertTotal int `json:"assert_total"`
+	// NoValidate 为 true 表示这条用例一条断言都没有。
+	//
+	// 这是「通过」里最需要被盯住的一种：引擎确实正常跑完了，所以归因是 pass，
+	// 但它验证不了任何东西。前端据此把归因提示降级为警告，与服务端
+	// NO_VALIDATE 静态校验保持同一口径。
+	NoValidate bool `json:"no_validate"`
 }
 
 // stepCounts 是步骤状态分布。
@@ -794,15 +806,22 @@ func (s *RunService) CaseResultViews(runID uint64) ([]CaseResultView, error) {
 	if err != nil {
 		return nil, err
 	}
+	asserts, err := s.assertionCounts(runID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]CaseResultView, 0, len(list))
 	for i := range list {
 		c := counts[list[i].ID]
+		assertTotal := asserts[list[i].ID]
 		out = append(out, CaseResultView{
 			CaseResult:        list[i],
 			AttributionLabel:  model.AttributionLabel(list[i].Attribution),
-			AttributionReason: model.AttributionReason(list[i].Attribution),
+			AttributionReason: model.AttributionReasonWith(list[i].Attribution, assertTotal),
 			StepFailed:        c.Failed,
 			StepError:         c.Error,
+			AssertTotal:       assertTotal,
+			NoValidate:        assertTotal == 0,
 		})
 	}
 	return out, nil
@@ -838,6 +857,32 @@ func (s *RunService) stepStatusCounts(runID uint64) (map[uint64]stepCounts, erro
 			c.Error += r.N
 		}
 		out[r.CaseResultID] = c
+	}
+	return out, nil
+}
+
+// assertionCounts 统计某次执行下每个用例结果的断言条数。
+//
+// 与 stepStatusCounts 同样是「一次 GROUP BY 取完」，不做 N+1。
+// 没有断言的用例结果不会出现在结果集里 —— 调用方按 map 零值拿到 0，
+// 这正是我们要的语义（0 条断言），因此**不要**给它兜一个默认 1。
+func (s *RunService) assertionCounts(runID uint64) (map[uint64]int, error) {
+	type row struct {
+		CaseResultID uint64 `gorm:"column:case_result_id"`
+		N            int    `gorm:"column:n"`
+	}
+	var rows []row
+	err := s.DB.Model(&model.AssertionResult{}).
+		Select("case_result_id, count(*) AS n").
+		Where("run_id = ?", runID).
+		Group("case_result_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, errInternal("统计断言条数失败", err)
+	}
+	out := make(map[uint64]int, len(rows))
+	for _, r := range rows {
+		out[r.CaseResultID] = r.N
 	}
 	return out, nil
 }

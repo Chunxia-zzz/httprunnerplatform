@@ -302,3 +302,141 @@ func mustStep(t *testing.T, d Deps, runID, caseResultID uint64, seq int, status 
 	}
 	return s
 }
+
+func mustAssert(t *testing.T, d Deps, runID, caseResultID, stepResultID uint64, seq int, passed bool) *model.AssertionResult {
+	t.Helper()
+	a := &model.AssertionResult{
+		RunID: runID, CaseResultID: caseResultID, StepResultID: stepResultID,
+		Seq: seq, CheckExpr: "status_code", AssertMethod: "eq",
+		ExpectValue: "200", ExpectValueType: "int",
+		CheckValue: "200", CheckValueType: "int",
+		Passed: passed,
+	}
+	if err := d.DB.Create(a).Error; err != nil {
+		t.Fatalf("创建断言结果失败: %v", err)
+	}
+	return a
+}
+
+// TestInsertCaseLayers_URL来源必须落库 锁住 BUG-003 的修复。
+//
+// FinalURLSource 是「不假绿」的组成部分：用例失败时引擎 panic、不产出
+// summary.json，那个 final_url 是平台用 stdout 报文快照拼回来的。前端要据此
+// 打「平台重建」标记；这个字段一旦在落库时丢掉，前端就只能把它当引擎权威值展示
+// —— 而界面上的断言明细恰恰标了「平台重建」，两者自相矛盾。
+//
+// 两层都要验：落库层（字段真的进了表）+ 接口层（真的返回给了前端）。
+// 只验落库会漏掉"存了但没查出来"这种更隐蔽的断链。
+func TestInsertCaseLayers_URL来源必须落库(t *testing.T) {
+	d := testDeps(t)
+	svc := New(d)
+	p := seedProject(t, d)
+	run := mustRun(t, d, p.ID)
+	cr := mustCaseResult(t, d, run.ID, 1)
+
+	steps := []parser.StepOutcome{
+		{
+			Seq: 1, Name: "通过步骤", StepType: model.StepRequest, Status: model.StatusPass,
+			FinalURL: "https://api.example.com/v1/listings/", FinalURLSource: "summary",
+		},
+		{
+			Seq: 2, Name: "失败步骤", StepType: model.StepRequest, Status: model.StatusFail,
+			FinalURL: "https://api.example.com/v1/listings/", FinalURLSource: "reconstructed",
+		},
+	}
+	if err := insertCaseLayers(d.DB, run.ID, cr.ID, "tc_1", steps); err != nil {
+		t.Fatalf("写步骤层失败: %v", err)
+	}
+
+	// —— 落库层 ——
+	var rows []model.StepResult
+	if err := d.DB.Where("case_result_id = ?", cr.ID).Order("seq asc").Find(&rows).Error; err != nil {
+		t.Fatalf("读步骤结果失败: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("步骤结果数 = %d, want 2", len(rows))
+	}
+	if rows[0].FinalURLSource != "summary" {
+		t.Errorf("通过步骤的 URL 来源 = %q, want summary（引擎权威值）", rows[0].FinalURLSource)
+	}
+	if rows[1].FinalURLSource != "reconstructed" {
+		t.Errorf("失败步骤的 URL 来源 = %q, want reconstructed（平台重建）", rows[1].FinalURLSource)
+	}
+
+	// —— 接口层：运行详情页拿步骤明细走的就是这个端点 ——
+	detail, err := svc.Run.CaseStepsDetail(run.ID)
+	if err != nil {
+		t.Fatalf("查询步骤明细失败: %v", err)
+	}
+	if len(detail) != 1 || len(detail[0].Steps) != 2 {
+		t.Fatalf("步骤明细结构异常: %+v", detail)
+	}
+	if got := detail[0].Steps[1].FinalURLSource; got != "reconstructed" {
+		t.Errorf("接口返回的 URL 来源 = %q, want reconstructed —— 前端据此标注「平台重建」", got)
+	}
+}
+
+// TestCaseResultViews_零断言时归因降级 锁住 BUG-004 的修复。
+//
+// 用例「一条断言都没写」时引擎正常退出，归因是 pass。原来的文案无条件写
+// 「全部断言通过」，让 0 条断言看起来像"验证过了"。这里要求：
+//
+//	no_validate / assert_total 两个派生字段算对（前端据此把提示降级为警告），
+//	且 0 条断言时的文案**绝不能**出现「全部断言通过」。
+func TestCaseResultViews_零断言时归因降级(t *testing.T) {
+	d := testDeps(t)
+	svc := New(d)
+	p := seedProject(t, d)
+	run := mustRun(t, d, p.ID)
+
+	// 用例 A：0 条断言，归因 pass（引擎确实跑完了）
+	crA := mustCaseResult(t, d, run.ID, 1)
+	if err := d.DB.Model(crA).Update("attribution", model.AttrPass).Error; err != nil {
+		t.Fatalf("改归因失败: %v", err)
+	}
+	mustStep(t, d, run.ID, crA.ID, 1, model.StatusPass)
+
+	// 用例 B：2 条断言且全过 —— 与 A 同为 pass，文案必须能区分开
+	crB := mustCaseResult(t, d, run.ID, 2)
+	if err := d.DB.Model(crB).Update("attribution", model.AttrPass).Error; err != nil {
+		t.Fatalf("改归因失败: %v", err)
+	}
+	stB := mustStep(t, d, run.ID, crB.ID, 1, model.StatusPass)
+	mustAssert(t, d, run.ID, crB.ID, stB.ID, 1, true)
+	mustAssert(t, d, run.ID, crB.ID, stB.ID, 2, true)
+
+	views, err := svc.Run.CaseResultViews(run.ID)
+	if err != nil {
+		t.Fatalf("查询用例结果视图失败: %v", err)
+	}
+	if len(views) != 2 {
+		t.Fatalf("用例结果数 = %d, want 2", len(views))
+	}
+
+	// —— 用例 A：0 条断言 ——
+	a := views[0]
+	if a.AssertTotal != 0 {
+		t.Errorf("用例 A 的断言条数 = %d, want 0", a.AssertTotal)
+	}
+	if !a.NoValidate {
+		t.Error("用例 A 的 no_validate 应为 true（前端据此把归因提示降级为警告）")
+	}
+	if strings.Contains(a.AttributionReason, "全部断言通过") {
+		t.Errorf("0 条断言时不能说「全部断言通过」（与 NO_VALIDATE 警告矛盾），实际 = %q", a.AttributionReason)
+	}
+	if !strings.Contains(a.AttributionReason, "没有声明任何断言") {
+		t.Errorf("0 条断言的文案应点明「没有声明任何断言」，实际 = %q", a.AttributionReason)
+	}
+
+	// —— 用例 B：2 条断言 ——
+	b := views[1]
+	if b.AssertTotal != 2 {
+		t.Errorf("用例 B 的断言条数 = %d, want 2（跨用例串台或统计漏了）", b.AssertTotal)
+	}
+	if b.NoValidate {
+		t.Error("用例 B 有断言，no_validate 应为 false")
+	}
+	if !strings.Contains(b.AttributionReason, "全部 2 条断言通过") {
+		t.Errorf("有断言时应给出具体条数，实际 = %q", b.AttributionReason)
+	}
+}

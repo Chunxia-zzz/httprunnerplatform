@@ -459,6 +459,14 @@ export interface CaseResultView extends CaseResult {
   step_failed: number
   /** 派生统计：status=error 的步骤数（步骤没跑完） */
   step_error: number
+  /** 派生统计：这条用例落库的断言条数 */
+  assert_total: number
+  /**
+   * ⭐ true 表示这条用例一条断言都没有。
+   * 此时归因仍是「通过」（引擎确实正常跑完了），但只验证了请求发得出去，
+   * 前端应把归因提示降级为警告，不要让它看起来像"验证过了"。
+   */
+  no_validate: boolean
 }
 
 export interface RunDetail {
@@ -508,6 +516,13 @@ export interface StepResult {
   inferred_failed: boolean
   /** ⭐ 最终生效 URL。可能与 YAML 声明的不同（引擎会补结尾斜杠，实测 A1） */
   final_url: string
+  /**
+   * ⭐ final_url 的来源，决定它有多可信：
+   *   'summary'        —— 引擎产出的权威值（用例通过时）
+   *   'reconstructed'  —— 平台用 stdout 报文快照重建的（用例失败、引擎 panic 时）
+   *   ''               —— 未知（该步骤没发出请求）
+   */
+  final_url_source: string
   request_snapshot: RequestSnapshot | null
   response_snapshot: ResponseSnapshot | null
   elapsed_ms: number
@@ -820,7 +835,8 @@ export interface DebugStep {
   elapsed_ms: number
   extract_result: EnvMap | null
   final_url: string
-  final_url_source: string
+  /** 同 StepResult.final_url_source；后端 omitempty，空来源时字段不出现 */
+  final_url_source?: string
   request: RequestSnapshot | null
   response: ResponseSnapshot | null
   assertions: AssertionResult[]

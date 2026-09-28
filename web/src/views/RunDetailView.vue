@@ -306,6 +306,10 @@ onBeforeUnmount(stopPoll)
             <template v-if="c.step_failed"> · 失败 {{ c.step_failed }}</template>
             <template v-if="c.step_error"> · 错误 {{ c.step_error }}</template>
           </el-descriptions-item>
+          <el-descriptions-item label="断言">
+            <template v-if="c.assert_total">共 {{ c.assert_total }} 条</template>
+            <el-tag v-else size="small" type="warning" effect="plain">未设置</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="退出码">{{ c.exit_code }}</el-descriptions-item>
           <el-descriptions-item label="引擎 panic">
             <el-tag size="small" :type="c.panic ? 'danger' : 'success'" effect="plain">
@@ -335,7 +339,24 @@ onBeforeUnmount(stopPoll)
           </el-descriptions-item>
         </el-descriptions>
 
-        <el-alert type="info" show-icon :closable="false" class="case-why" :title="`归因：${c.attribution_label}`">
+        <!--
+          ⭐ 0 条断言时归因仍然是「通过」（引擎确实正常跑完了，本身没错），
+          但它什么都没验证。用 info 色 + 「全部断言通过」的话术会让用户
+          读成"验证过了" —— 这里降级成 warning 并挂一个「无断言」标记，
+          与服务端 NO_VALIDATE 静态校验、attribution_reason 文案保持同一口径。
+        -->
+        <el-alert
+          :type="c.no_validate ? 'warning' : 'info'"
+          show-icon
+          :closable="false"
+          class="case-why"
+        >
+          <template #title>
+            归因：{{ c.attribution_label }}
+            <el-tag v-if="c.no_validate" size="small" type="warning" effect="dark" class="case-why__tag">
+              无断言
+            </el-tag>
+          </template>
           {{ c.attribution_reason }}
         </el-alert>
 
@@ -480,6 +501,11 @@ onBeforeUnmount(stopPoll)
 
 .case-why {
   margin-bottom: 12px;
+}
+
+.case-why__tag {
+  margin-left: 6px;
+  vertical-align: middle;
 }
 
 .case-why__pre {

@@ -9,6 +9,9 @@
  *   3. **`rebuilt=true` 的断言不是引擎结论**：断言失败时引擎 panic 且不产出任何
  *      明细（实测 F8），这些行是平台用「声明的断言 + stdout 报文快照」重建的，
  *      必须显式标注，否则用户会误以为引擎给出了该判定。
+ *   4. **URL 也要标来源**：同一条失败路径下 final_url 同样是平台重建的
+ *      （`final_url_source='reconstructed'`）。断言有来源列、URL 却没有标注，
+ *      是同一个「不假绿」原则上的缺口（见 docs/验收问题记录.md BUG-003）。
  */
 import { computed } from 'vue'
 
@@ -50,6 +53,22 @@ const hasRequest = computed(() => !!props.step.request_snapshot)
 const hasResponse = computed(() => !!props.step.response_snapshot)
 const extractEntries = computed(() => Object.entries(props.step.extract_result ?? {}))
 const rebuiltCount = computed(() => (props.step.assertions ?? []).filter((a) => a.rebuilt).length)
+
+/**
+ * 最终生效 URL 的来源。
+ *
+ * 与断言明细的「来源」列是同一件事：用例失败时引擎 panic、不产出 summary.json，
+ * 平台只能用 stdout 报文快照把 URL 拼回来（协议靠「用例声明值 → 传输层证据 →
+ * 报文快照启发式」三级推导，见 docs/验收问题记录.md BUG-002）。
+ * 这种重建值必须显式标注，否则用户无从判断该地址是否等同于引擎实际请求的地址 ——
+ * 「不假绿」不止适用于断言结论，也适用于 URL。
+ */
+const urlSource = computed(() => (props.step.final_url_source ?? '').trim())
+const urlSourceTip = computed(() =>
+  urlSource.value === 'reconstructed'
+    ? '用例失败时引擎 panic 且不产出 summary.json，这个地址是平台用 stdout 报文快照重建的（请求行 + Host 头）。协议取自用例声明值或传输层证据，未必等同于引擎内部的最终地址。'
+    : '取自引擎的 summary.json，是本次请求真正生效的地址（含引擎自动补的尾斜杠）。',
+)
 </script>
 
 <template>
@@ -83,6 +102,16 @@ const rebuiltCount = computed(() => (props.step.assertions ?? []).filter((a) => 
       <div class="sd__url-row">
         <span class="sd__url-label">最终生效 URL</span>
         <span class="hrp-mono sd__url-value">{{ step.final_url || '（无）' }}</span>
+        <el-tooltip v-if="step.final_url && urlSource" :content="urlSourceTip" placement="top">
+          <el-tag
+            class="sd__url-src"
+            size="small"
+            :type="urlSource === 'reconstructed' ? 'warning' : 'info'"
+            :effect="urlSource === 'reconstructed' ? 'dark' : 'plain'"
+          >
+            {{ urlSource === 'reconstructed' ? '平台重建' : '引擎' }}
+          </el-tag>
+        </el-tooltip>
       </div>
       <div v-if="declaredUrl" class="sd__url-row">
         <span class="sd__url-label">用例声明</span>
@@ -246,6 +275,11 @@ const rebuiltCount = computed(() => (props.step.assertions ?? []).filter((a) => 
 .sd__url-value {
   font-size: 12px;
   word-break: break-all;
+}
+
+.sd__url-src {
+  flex: none;
+  margin-left: 6px;
 }
 
 .sd__snapshots {
