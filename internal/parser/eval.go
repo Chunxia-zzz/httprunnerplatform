@@ -122,16 +122,21 @@ func evalOne(it model.AssertItem, resp *ResponseSnapshot) (actual string, actual
 		}
 		return renderValueOK(nil)
 
-	case check == model.ExtractBody || check == "body" || strings.HasPrefix(check, "body."):
+	case check == model.ExtractBody || check == "body" ||
+		strings.HasPrefix(check, "body.") || strings.HasPrefix(check, "body["):
 		root, err := decodeBody(resp)
 		if err != nil {
 			return "", "", false, "响应体不是合法 JSON，无法按路径取值：" + err.Error()
 		}
-		path := strings.TrimPrefix(strings.TrimPrefix(check, "body"), ".")
+		// `body.data[0].name` / `body["data"][0]` 都要剥掉 `body` 前缀。
+		// 先剥 `body`，再剥可能紧跟的一个点号（`body.` 形态）。
+		// 方括号形态（`body[`）剥掉 `body` 后剩下的 `[...]` 正好是下一段的起点。
+		path := strings.TrimPrefix(check, "body")
+		path = strings.TrimPrefix(path, ".")
 		if path == "" {
 			return renderValueOK(root)
 		}
-		v, found := lookupPath(root, strings.Split(path, "."))
+		v, found := lookupPath(root, splitPathExpr(path))
 		if !found {
 			// 路径不存在：引擎在这种情况下也会给出 nil 值参与比较。
 			return renderValueOK(nil)
@@ -189,13 +194,49 @@ func lookupCookie(headers map[string]string, name string) (string, bool) {
 //
 // 引擎在断言 body.* 时也是把 body 当 JSON 解析的；
 // 解析失败说明用例的断言方式与服务端返回不匹配，属于用例问题。
+//
+// ⚠️ 但"响应体不是干净 JSON"有两种截然不同的成因，必须分开对待：
+//   - 服务端返回的本来就不是 JSON（HTML 错误页、纯文本）→ 真的无法按路径取值；
+//   - **传输层封帧**：httpx 打印的是原始报文，chunked 响应的体会带上
+//     十六进制块长度行（如 `4904`）和结尾的 `0`，JSON 本体被夹在中间。
+//
+// 第二种在验收现场真实踩到过（BUG-001 的第二层成因，见 docs/验收问题记录.md）：
+// 体首的 `4904` 会被 json.Decode **当成一个裸数字解析成功**，
+// 于是 root 变成 json.Number，所有 `body.xxx` 路径全部取不到值 ——
+// 症状与"数组下标解析失败"完全一致（页面上都是"实际值 (nil)"），
+// 但根因完全不同，所以这里必须单独兜住。
+//
+// 做法：如果响应体不是以 `{` / `[` 开头，就先尝试抠出最外层的 JSON 值。
 func decodeBody(resp *ResponseSnapshot) (any, error) {
-	body := strings.TrimSpace(resp.Body)
-	if body == "" {
+	raw := strings.TrimSpace(resp.Body)
+	if raw == "" {
 		return nil, fmt.Errorf("响应体为空")
 	}
+
+	// 绝大多数情况：本来就以 JSON 容器的花括号/方括号开头，直接解析。
+	if strings.HasPrefix(raw, "{") || strings.HasPrefix(raw, "[") {
+		return decodeJSON(raw)
+	}
+
+	// 被别的东西包着（chunked 封帧、前缀噪声）：先抠出 JSON 本体。
+	if inner, ok := extractJSONValue(raw); ok {
+		if v, err := decodeJSON(inner); err == nil {
+			return v, nil
+		}
+	}
+
+	// 兜底：直接解析原文，把真实错误抛出去
+	// （例如响应体就是一个裸标量 `123`，或真的不是 JSON）。
+	return decodeJSON(raw)
+}
+
+// decodeJSON 用 UseNumber 解析一段 JSON 文本。
+//
+// UseNumber 是刻意的：整型必须与引擎一样报成 int64，
+// 否则 `200` 会变成 float64，UI 上「平台重建」和「引擎给出」的类型名会对不上。
+func decodeJSON(s string) (any, error) {
 	var v any
-	dec := json.NewDecoder(strings.NewReader(body))
+	dec := json.NewDecoder(strings.NewReader(s))
 	dec.UseNumber()
 	if err := dec.Decode(&v); err != nil {
 		return nil, err
@@ -203,7 +244,103 @@ func decodeBody(resp *ResponseSnapshot) (any, error) {
 	return v, nil
 }
 
-// lookupPath 沿点号路径取值，支持 map 键与数组下标。
+// extractJSONValue 从夹杂噪声的文本里抠出最外层的 JSON 对象/数组。
+//
+// 取「第一个 `{` 或 `[`」到「最后一个配对的 `}` 或 `]`」。
+// 这一步对所有"JSON 被前缀/后缀噪声包着"的情况都够用，
+// 而不必去实现一个完整的 HTTP chunked 解码器 —— 后者的收益比很低：
+// 一是不必关心每个分块的十六进制长度，二是天然容忍开头的封帧行与结尾的 `0`。
+//
+// 抠不出（没有起始括号，或括号不配对）时返回 ok=false，
+// 由调用方决定怎么报错 —— 不在这一层掩盖错误。
+func extractJSONValue(raw string) (string, bool) {
+	start := -1
+	var closer byte
+
+	if i := strings.IndexByte(raw, '{'); i >= 0 {
+		start, closer = i, '}'
+	}
+	if i := strings.IndexByte(raw, '['); i >= 0 && (start < 0 || i < start) {
+		start, closer = i, ']'
+	}
+	if start < 0 {
+		return "", false
+	}
+
+	end := strings.LastIndexByte(raw, closer)
+	if end <= start {
+		return "", false
+	}
+	return raw[start : end+1], true
+}
+
+// splitPathExpr 把取值表达式切成「键/下标」段序列。
+//
+// 为什么不能再用 strings.Split(expr, ".")：
+// 断言里的 check 字段最终由**引擎的 jmespath** 求值，而 jmespath 规定
+// 数组下标必须写成方括号（`body.data[0].name`）。平台若仍按点号切分，
+// 会把它切成 ["data[0]", "name"]，然后在 map 里找键 "data[0]" —— 永远找不到，
+// 于是"实际值"恒为 nil。
+//
+// 这一点是**实测**出来的（见 docs/验收问题记录.md 的 BUG-001）：期望值写错时
+// 引擎 panic、没有 summary，断言明细只能由平台用响应快照重建；而重建在数组
+// 下标场景下报不出真实值，恰好击穿了平台"不假绿、告诉你哪里不符预期"的核心承诺。
+//
+// 同时保留对这三种写法的兼容：
+//   - `data[0].name`  jmespath 标准写法（引擎唯一接受的数组下标形式）
+//   - `data.0.name`   纯数字段（平台早期写法；引擎会语法报错，但解析器不因此崩）
+//   - `[0].name`      根节点本身就是数组
+//
+// 以及 jmespath 的方括号引号键 `data["a.b"]`（内部含点号也能正确当一段）。
+func splitPathExpr(expr string) []string {
+	segs := make([]string, 0, 4)
+	var cur strings.Builder
+
+	flush := func() {
+		if cur.Len() > 0 {
+			segs = append(segs, cur.String())
+			cur.Reset()
+		}
+	}
+
+	for i := 0; i < len(expr); i++ {
+		switch expr[i] {
+		case '.':
+			flush()
+		case '[':
+			flush()
+			// 找到配对的 ']'；找不到就吃到结尾（容错，不 panic）。
+			j := i + 1
+			for j < len(expr) && expr[j] != ']' {
+				j++
+			}
+			inner := strings.TrimSpace(expr[i+1 : j])
+			if len(inner) >= 2 {
+				// `["a.b"]` / `['a.b']`：剥掉引号，内部的点号不再是分隔符。
+				if (inner[0] == '"' && inner[len(inner)-1] == '"') ||
+					(inner[0] == '\'' && inner[len(inner)-1] == '\'') {
+					inner = inner[1 : len(inner)-1]
+				}
+			}
+			if inner != "" {
+				segs = append(segs, inner)
+			}
+			i = j
+		case ']':
+			// 孤立的 ']' 忽略掉，避免产生空段。
+		default:
+			cur.WriteByte(expr[i])
+		}
+	}
+	flush()
+	return segs
+}
+
+// lookupPath 沿切好的段序列取值，支持 map 键与数组下标。
+//
+// 段是"键"还是"下标"由**当前节点的类型**决定（而不是由段的字面形态决定）：
+// map 就按键查，数组就按数字转下标。这样 `["data", "0", "name"]` 与
+// `["data", "name"]` 两种切法都能正确落到同一处。
 func lookupPath(root any, path []string) (any, bool) {
 	cur := root
 	for _, seg := range path {

@@ -155,7 +155,7 @@ func buildSteps(in Input, events []*stepEvent, pairs []stdoutPair, doc *summaryD
 			oc.Request = p.Request
 			oc.Response = p.Response
 			if p.Request != nil {
-				oc.FinalURL = reconstructURL(p.Request)
+				oc.FinalURL = reconstructURL(p.Request, p.Response, decl.URL)
 				oc.FinalURLSource = "reconstructed"
 			}
 		}
@@ -287,15 +287,83 @@ func assertionFromLogLines(lines []logLine) []AssertionOutcome {
 // 为什么要重建：断言失败时没有 summary.json，而"最终生效 URL"
 // 恰恰是用户最需要看到的（hrp 会给无查询串的 URL 自动补尾斜杠，实测 F9）。
 // 请求行里的 path 就是真实发出的路径，Host 头给出主机，两者拼起来即完整地址。
-func reconstructURL(req *RequestSnapshot) string {
+//
+// declaredURL 是该步骤在用例里声明的 URL（可能为空、也可能含 `$var`）；
+// resp 是同一报文块里的响应快照（可能为 nil）。
+//
+// ⚠️ scheme 为什么必须以"声明值"为准（BUG-002）：
+// 早期实现直接猜（`Proto == HTTP/2` 或 Host 带 :443 才算 https，否则 http）。
+// 而 stdout 里打印的请求行几乎总是 `HTTP/1.1`，Host 头也不带 `:443`，
+// 于是一个 `https://` 的用例在失败运行（无 summary）时会被渲染成 `http://`，
+// 与同一张卡片上的"用例声明 https://"自相矛盾，用户会以为引擎改写了协议。
+//
+// 取值优先级（高 → 低）：
+//  1. 用例声明的 URL 里的字面 scheme —— 最贴近用户意图，且能让
+//     "最终生效 URL"与"用例声明"两行在协议上必然一致；
+//  2. 响应块里的传输层信息 `Connected via TLSv1.3` / `Connected via plaintext`
+//     —— 用例用 `$base_url/xxx` 这类变量写法时（推荐做法）声明值里没有 scheme，
+//     这一行是**事实上**走了什么协议的直接证据；
+//  3. 报文快照的 Proto / 端口启发式 —— 连接都没建立起来时的最后兜底。
+func reconstructURL(req *RequestSnapshot, resp *ResponseSnapshot, declaredURL string) string {
 	if req == nil || req.Host == "" || req.Path == "" {
 		return ""
 	}
-	scheme := "http"
-	if req.Proto == "HTTP/2" || strings.Contains(strings.ToLower(req.Host), ":443") {
-		scheme = "https"
-	}
+	scheme := firstNonEmpty(
+		schemeFromDeclared(declaredURL),
+		schemeFromTransport(resp),
+		schemeFromSnapshot(req),
+	)
 	return scheme + "://" + req.Host + req.Path
+}
+
+// schemeFromDeclared 从用例声明的 URL 里取 scheme，取不到返回空串。
+//
+// 只认字面量：`$base_url/v2/listings/` 这种含变量的声明取不到 scheme，
+// 交给下一级判据（这正是推荐写法，所以这一级经常会落空，是预期行为）。
+func schemeFromDeclared(u string) string {
+	i := strings.Index(u, "://")
+	if i <= 0 {
+		return ""
+	}
+	switch s := strings.ToLower(u[:i]); s {
+	case "http", "https":
+		return s
+	default:
+		return ""
+	}
+}
+
+// schemeFromTransport 从响应块首行的传输层描述里判断协议。
+//
+// httpx 会打印 `Connected via TLSv1.3`（HTTPS）或 `Connected via plaintext`（HTTP），
+// 这是"实际用了什么协议"的直接证据，比任何启发式都可靠。
+func schemeFromTransport(resp *ResponseSnapshot) string {
+	if resp == nil || resp.Transport == "" {
+		return ""
+	}
+	t := strings.ToLower(resp.Transport)
+	switch {
+	case strings.Contains(t, "tls"):
+		return "https"
+	case strings.Contains(t, "plaintext"):
+		return "http"
+	default:
+		return ""
+	}
+}
+
+// schemeFromSnapshot 在没有更硬的证据时，从报文快照推断协议。
+//
+// 这是个"尽力而为"的兜底，判据只有两条线索：
+//   - 用 HTTP/2 协商成功的基本都是 https；
+//   - Host 显式带 :443。
+//
+// 用 HasSuffix 而不是 Contains，避免 `example.com:4430` 被误判成 https。
+func schemeFromSnapshot(req *RequestSnapshot) string {
+	if strings.EqualFold(req.Proto, "HTTP/2") || strings.HasSuffix(req.Host, ":443") {
+		return "https"
+	}
+	return "http"
 }
 
 // isHTTPStep 判断该步骤类型是否会发出 HTTP 请求（据此决定是否消耗 stdout 快照）。

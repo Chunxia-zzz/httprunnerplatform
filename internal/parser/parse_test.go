@@ -630,3 +630,132 @@ func TestParse_遥测失败不能冒充用例错误(t *testing.T) {
 		t.Errorf("错误摘要里不该出现遥测噪音，实际: %q", res2.ErrorMsg)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// BUG-002：「最终生效 URL」的协议被篡改成 http
+//
+// 背景（真实验收复现）：用例用 https://，断言失败后（无 summary.json，
+// 只能由 stdout 报文重建 URL），页面上的"最终生效 URL"变成了 http://，
+// 与同一张卡片上的"用例声明 https://"自相矛盾 —— 用户会以为引擎改写了协议。
+//
+// 根因：reconstructURL 把 scheme 当成了"猜"的事 ——
+// 只有 `Proto == HTTP/2` 或 Host 含 ":443" 才算 https。
+// 而 stdout 里的请求行几乎总是 `HTTP/1.1`、Host 头也不带端口，
+// 于是一个 https 用例必然被渲染成 http。
+//
+// 修复：改为有依据地推导（声明值 → 传输层证据 → 端口/协议启发式）。
+// ---------------------------------------------------------------------------
+
+// TestReconstructURL_协议推导优先级 是 BUG-002 的回归。
+func TestReconstructURL_协议推导优先级(t *testing.T) {
+	cases := []struct {
+		name     string
+		req      *RequestSnapshot
+		resp     *ResponseSnapshot
+		declared string
+		want     string
+	}{
+		{
+			name: "声明里是 https：请求行写着 HTTP/1.1 也不能报成 http（BUG-002 正身）",
+			req: &RequestSnapshot{
+				Method: "GET", Path: "/v2/listings/", Host: "api.alternative.me", Proto: "HTTP/1.1",
+			},
+			declared: "https://api.alternative.me/v2/listings/",
+			want:     "https://api.alternative.me/v2/listings/",
+		},
+		{
+			name:     "声明里是 http：不能被猜成 https",
+			req:      &RequestSnapshot{Method: "GET", Path: "/get/", Host: "127.0.0.1:8899", Proto: "HTTP/1.1"},
+			declared: "http://127.0.0.1:8899/get",
+			want:     "http://127.0.0.1:8899/get/",
+		},
+		{
+			name:     "声明用变量（推荐写法）：退回传输层证据 TLSv1.3 判 https",
+			req:      &RequestSnapshot{Path: "/v2/listings/", Host: "api.alternative.me", Proto: "HTTP/1.1"},
+			resp:     &ResponseSnapshot{Transport: "Connected via TLSv1.3"},
+			declared: "$base_url/v2/listings/",
+			want:     "https://api.alternative.me/v2/listings/",
+		},
+		{
+			name:     "声明用变量：传输层是 plaintext 判 http",
+			req:      &RequestSnapshot{Path: "/get/", Host: "127.0.0.1:8899", Proto: "HTTP/1.1"},
+			resp:     &ResponseSnapshot{Transport: "Connected via plaintext"},
+			declared: "$base_url/get",
+			want:     "http://127.0.0.1:8899/get/",
+		},
+		{
+			name: "声明与传输层都没有（连接未建立）：退回端口启发式",
+			req:  &RequestSnapshot{Path: "/get/", Host: "example.com:443", Proto: "HTTP/1.1"},
+			want: "https://example.com:443/get/",
+		},
+		{
+			name: "端口启发式不能把 :4430 误判成 https（旧实现用 Contains 会踩）",
+			req:  &RequestSnapshot{Path: "/get/", Host: "example.com:4430", Proto: "HTTP/1.1"},
+			want: "http://example.com:4430/get/",
+		},
+		{
+			name: "HTTP/2 且无其它线索：判 https",
+			req:  &RequestSnapshot{Path: "/get/", Host: "example.com", Proto: "HTTP/2"},
+			want: "https://example.com/get/",
+		},
+		{
+			name: "缺 Host：不做无依据的拼装",
+			req:  &RequestSnapshot{Path: "/get/", Proto: "HTTP/1.1"},
+			want: "",
+		},
+		{
+			name: "请求快照为 nil",
+			want: "",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := reconstructURL(c.req, c.resp, c.declared); got != c.want {
+				t.Errorf("reconstructURL() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// TestSchemeFromDeclared_只认http与https：别的协议不能冒充，
+// 更不能因为"用户写了 ftp://"就拼出一个假的 http 地址。
+func TestSchemeFromDeclared_只认http与https(t *testing.T) {
+	cases := map[string]string{
+		"https://a.com/x": "https",
+		"HTTP://a.com/x":  "http",
+		"Https://a.com/x": "https",
+		"ftp://a.com/x":   "",
+		"$base_url/x":     "",
+		"//a.com/x":       "",
+		"a.com/x":         "",
+		"":                "",
+	}
+	for in, want := range cases {
+		if got := schemeFromDeclared(in); got != want {
+			t.Errorf("schemeFromDeclared(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestSchemeFromTransport_从响应块识别协议。
+func TestSchemeFromTransport_从响应块识别协议(t *testing.T) {
+	cases := []struct {
+		name string
+		resp *ResponseSnapshot
+		want string
+	}{
+		{"TLSv1.3", &ResponseSnapshot{Transport: "Connected via TLSv1.3"}, "https"},
+		{"TLSv1.2", &ResponseSnapshot{Transport: "Connected via TLSv1.2"}, "https"},
+		{"plaintext", &ResponseSnapshot{Transport: "Connected via plaintext"}, "http"},
+		{"无传输层信息", &ResponseSnapshot{}, ""},
+		{"响应为 nil", nil, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := schemeFromTransport(c.resp); got != c.want {
+				t.Errorf("schemeFromTransport() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
