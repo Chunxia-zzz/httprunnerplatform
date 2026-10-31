@@ -11,7 +11,7 @@
 | 目标用户 | 小型测试团队（约 10 人） |
 | 产品形态 | 私有化部署（非 SaaS） |
 | 执行引擎 | HttpRunner **v4.3.6**（`hrp` 二进制，子进程调用，不 fork） |
-| 后端 | Go（Gin + GORM + MySQL 8） |
+| 后端 | Go（Gin + GORM + SQLite/MySQL 双驱动，默认 SQLite） |
 | 前端 | Vue 3 + Vite + TypeScript + Element Plus |
 | 交付形态 | 单个可执行文件（内嵌前端）+ 一个数据库 |
 

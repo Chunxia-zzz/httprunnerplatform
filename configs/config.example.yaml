@@ -12,8 +12,15 @@ server:
   mode: release # debug | release
 
 database:
-  driver: mysql
-  dsn: "root:password@tcp(127.0.0.1:3306)/httprunnerplatform?charset=utf8mb4&parseTime=True&loc=Local"
+  # ⭐ 默认 SQLite：单文件交付的天然搭配（部署 = 一个 exe + 一个 db 文件，
+  # 备份 = 停写拷文件）。db 文件必须放在服务器**本地磁盘**，不要放 NAS/网络盘。
+  # 30 人团队的数据量（每年几十万行）远在 SQLite 舒适区内；真正的约束是
+  # 单写者，并发由平台的进程内任务队列 + busy_timeout 排队兜住。
+  driver: sqlite
+  dsn: "data/platform.db"
+  # 如需切 MySQL 8（公司已有实例等），取消注释并注释掉上面两行：
+  # driver: mysql
+  # dsn: "root:password@tcp(127.0.0.1:3306)/httprunnerplatform?charset=utf8mb4&parseTime=True&loc=Local"
   max_open_conns: 20
   max_idle_conns: 5
 
