@@ -1,0 +1,55 @@
+# 流水线门槛：docs/项目进度检查报告.md 建议二（CI 固化本轮检查）。
+#
+# 后端与前端拆成两个 job 并行跑；步骤与 Makefile 的 `make check`、
+# 本地 `bash scripts/check.sh` 完全同源：
+#   gofmt -l / go vet / go test -cover / vitest / vue-tsc
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt -l（有任何未格式化文件即失败）
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "$out"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test -cover
+        run: go test -cover ./...
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安装依赖（npm ci 按 lock 精确安装）
+        run: npm ci
+
+      - name: 前端单测（vitest）
+        run: npm test
+
+      - name: 前端类型（vue-tsc）
+        run: npm run typecheck
