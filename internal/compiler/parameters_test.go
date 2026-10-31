@@ -112,7 +112,7 @@ func Test参数化_list来源转关联pairs(t *testing.T) {
 }
 
 // Test参数化_list来源limit裁剪 数据集自身 ds.Limit 生效于编译期
-//（引用处未显式给 limit 时回退到数据集默认值）。
+// （引用处未显式给 limit 时回退到数据集默认值）。
 func Test参数化_list来源limit裁剪(t *testing.T) {
 	ds := listDataset("d", []map[string]any{
 		{"u": "a"}, {"u": "b"}, {"u": "c"},

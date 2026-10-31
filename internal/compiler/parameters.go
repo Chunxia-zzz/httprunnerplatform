@@ -9,10 +9,10 @@
 //   - **引擎层**（编译产物 YAML）：按数据源转成两种实测生效的形态——
 //
 //     列表来源（行式 Inline）→ 关联参数内联 pairs（键 = 列名 '-' 连接）：
-//         username-password: [["alice","pw1"], ["bob","pw2"]]
+//     username-password: [["alice","pw1"], ["bob","pw2"]]
 //
 //     CSV 来源 → ${P()} 函数引用（文件随工作区复制进运行 cwd）：
-//         username-password: "${P(data/users.csv)}"
+//     username-password: "${P(data/users.csv)}"
 //
 // 为什么不能把行式数据拆成独立键（username: [...] + password: [...]）：
 // 多个独立键是**笛卡尔积**（实测 A22 结论二），行式数据是**成对关联**（结论五）。

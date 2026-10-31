@@ -50,8 +50,8 @@ type ParamDatasetReq struct {
 	Name     string    `json:"name"`
 	Source   string    `json:"source"`
 	Inline   jsonx.Any `json:"inline"`
-	CsvName  string    `json:"csv_name"`  // Source=csv 时必填，形如 users.csv（不含路径）
-	CsvText  string    `json:"csv_text"`  // Source=csv 时可选：直接传 CSV 文本（新建/替换内容）
+	CsvName  string    `json:"csv_name"` // Source=csv 时必填，形如 users.csv（不含路径）
+	CsvText  string    `json:"csv_text"` // Source=csv 时可选：直接传 CSV 文本（新建/替换内容）
 	Strategy string    `json:"strategy"`
 	Limit    int       `json:"limit"`
 }

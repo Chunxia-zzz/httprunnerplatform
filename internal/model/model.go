@@ -593,15 +593,15 @@ type CaseResult struct {
 // StepResult 是步骤级结果。
 type StepResult struct {
 	Base
-	RunID            uint64    `gorm:"not null;index" json:"run_id"`
-	CaseResultID     uint64    `gorm:"not null;index" json:"case_result_id"`
-	CaseCode         string    `gorm:"size:64;not null;default:''" json:"case_code"`
-	Seq              int       `gorm:"not null;default:0" json:"seq"`
-	StepName         string    `gorm:"size:128;not null;default:''" json:"step_name"`
-	StepType         string    `gorm:"size:16;not null;default:'request'" json:"step_type"`
-	Status           string    `gorm:"size:16;not null;default:'pending'" json:"status"`
-	InferredFailed   bool      `gorm:"not null" json:"inferred_failed"`
-	FinalURL         string    `gorm:"size:1024;not null;default:''" json:"final_url"`
+	RunID          uint64 `gorm:"not null;index" json:"run_id"`
+	CaseResultID   uint64 `gorm:"not null;index" json:"case_result_id"`
+	CaseCode       string `gorm:"size:64;not null;default:''" json:"case_code"`
+	Seq            int    `gorm:"not null;default:0" json:"seq"`
+	StepName       string `gorm:"size:128;not null;default:''" json:"step_name"`
+	StepType       string `gorm:"size:16;not null;default:'request'" json:"step_type"`
+	Status         string `gorm:"size:16;not null;default:'pending'" json:"status"`
+	InferredFailed bool   `gorm:"not null" json:"inferred_failed"`
+	FinalURL       string `gorm:"size:1024;not null;default:''" json:"final_url"`
 	// FinalURLSource 说明 FinalURL 的来源：summary（引擎权威）/ reconstructed（平台重建）。
 	//
 	// 与断言明细的 Rebuilt 是同一套「不假绿」原则：URL 在失败运行里同样是

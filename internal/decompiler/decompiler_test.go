@@ -191,9 +191,9 @@ func asLineError(err error, target **LineError) bool {
 
 func TestSplitExtractExpr(t *testing.T) {
 	cases := []struct {
-		expr   string
-		obj    string
-		path   string
+		expr string
+		obj  string
+		path string
 	}{
 		{"body.args.token", "body", "args.token"},
 		{"status_code", "status_code", ""},

@@ -29,7 +29,7 @@ func mustDebugCase(t *testing.T, d Deps) (*model.Project, *CaseDetail) {
 				Enabled: &off,
 			},
 			{Seq: 3, StepType: model.StepRequest, Name: "查用户",
-				Request: reqAny(map[string]any{"method": "GET", "url": "$base_url/user"}),
+				Request:  reqAny(map[string]any{"method": "GET", "url": "$base_url/user"}),
 				Validate: []model.AssertItem{{Check: "status_code", Assert: "eq", Expect: float64(200)}},
 			},
 		},
@@ -100,7 +100,7 @@ func TestDebugStep_跨项目用例拒绝(t *testing.T) {
 
 	svc := &DebugService{Deps: d}
 	_, err := svc.DebugStep(context.Background(), DebugStepRequest{
-		ProjectID: p2.ID,       // 故意传另一个项目
+		ProjectID: p2.ID, // 故意传另一个项目
 		CaseID:    detail.ID,
 		StepSeq:   1,
 	})

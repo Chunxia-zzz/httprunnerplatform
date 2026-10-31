@@ -24,13 +24,13 @@ func NewStatsService(d Deps) *StatsService {
 
 // TrendPoint 是趋势图上的一个点（按天聚合）。
 type TrendPoint struct {
-	Day     string  `json:"day"` // 形如 2006-01-02
-	Total   int     `json:"total"`
-	Passed  int     `json:"passed"`
-	Failed  int     `json:"failed"`
-	Error   int     `json:"error"`
-	Rate    float64 `json:"rate"`    // 通过率（passed/total，total=0 时为 0）
-	AvgMs   int64   `json:"avg_ms"`  // 平均耗时
+	Day    string  `json:"day"` // 形如 2006-01-02
+	Total  int     `json:"total"`
+	Passed int     `json:"passed"`
+	Failed int     `json:"failed"`
+	Error  int     `json:"error"`
+	Rate   float64 `json:"rate"`   // 通过率（passed/total，total=0 时为 0）
+	AvgMs  int64   `json:"avg_ms"` // 平均耗时
 }
 
 // FlakyCase 是不稳定/常败用例排行里的一项（按 case_code 聚合）。
@@ -45,12 +45,12 @@ type FlakyCase struct {
 
 // SlowCase 是慢用例排行里的一项（按 case_code 聚合）。
 type SlowCase struct {
-	CaseID     uint64  `json:"case_id"`
-	CaseCode   string  `json:"case_code"`
-	ConfigName string  `json:"config_name"`
-	Runs       int     `json:"runs"`
-	AvgMs      int64   `json:"avg_ms"`
-	MaxMs      int64   `json:"max_ms"`
+	CaseID     uint64 `json:"case_id"`
+	CaseCode   string `json:"case_code"`
+	ConfigName string `json:"config_name"`
+	Runs       int    `json:"runs"`
+	AvgMs      int64  `json:"avg_ms"`
+	MaxMs      int64  `json:"max_ms"`
 }
 
 // StatsQuery 是统计查询的公共参数。

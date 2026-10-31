@@ -34,37 +34,37 @@ import (
 //
 // 刻意不 import service 包（避免循环依赖），只声明反解析需要填充的子集。
 type CaseReq struct {
-	Name        string          `json:"name"`
-	Module      string          `json:"module"`
-	Priority    string          `json:"priority"`
-	Tags        string          `json:"tags"`
-	Status      string          `json:"status"`
-	Description string          `json:"description"`
-	Config      jsonx.Any       `json:"config"`
-	Steps       []StepReq       `json:"steps"`
-	CaseTimeout int             `json:"case_timeout"`
+	Name        string    `json:"name"`
+	Module      string    `json:"module"`
+	Priority    string    `json:"priority"`
+	Tags        string    `json:"tags"`
+	Status      string    `json:"status"`
+	Description string    `json:"description"`
+	Config      jsonx.Any `json:"config"`
+	Steps       []StepReq `json:"steps"`
+	CaseTimeout int       `json:"case_timeout"`
 }
 
 // StepReq 是反解析出的单个步骤。
 type StepReq struct {
-	Seq      int        `json:"seq"`
-	Name     string     `json:"name"`
-	StepType string     `json:"step_type"`
-	Request  *Request   `json:"request,omitempty"`
-	Variables jsonx.Map `json:"variables,omitempty"`
-	Extract  []ExtractItem `json:"extract"`
-	Validate []AssertItem  `json:"validate"`
+	Seq       int           `json:"seq"`
+	Name      string        `json:"name"`
+	StepType  string        `json:"step_type"`
+	Request   *Request      `json:"request,omitempty"`
+	Variables jsonx.Map     `json:"variables,omitempty"`
+	Extract   []ExtractItem `json:"extract"`
+	Validate  []AssertItem  `json:"validate"`
 }
 
 // Request 对应一个请求步骤的 request 段。
 type Request struct {
-	Method  string    `json:"method"`
-	URL     string    `json:"url"`
-	Headers jsonx.Map `json:"headers,omitempty"`
-	Params  jsonx.Map `json:"params,omitempty"`
-	Body    jsonx.Any `json:"body,omitempty"`
-	BodyType string   `json:"body_type,omitempty"`
-	Timeout int       `json:"timeout,omitempty"`
+	Method   string    `json:"method"`
+	URL      string    `json:"url"`
+	Headers  jsonx.Map `json:"headers,omitempty"`
+	Params   jsonx.Map `json:"params,omitempty"`
+	Body     jsonx.Any `json:"body,omitempty"`
+	BodyType string    `json:"body_type,omitempty"`
+	Timeout  int       `json:"timeout,omitempty"`
 }
 
 // ExtractItem 是反解析出的提取项。
