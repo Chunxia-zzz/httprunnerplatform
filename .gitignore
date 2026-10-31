@@ -79,3 +79,4 @@ go.work.sum
 results/
 __pycache__/
 .debugtalk_gen.py
+.coverage-tmp.out
