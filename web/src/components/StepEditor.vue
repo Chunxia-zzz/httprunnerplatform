@@ -6,6 +6,9 @@
  * 改动对象的属性是允许的；这里之所以这么做，是因为步骤内容嵌套很深，
  * 每层都 emit 一遍会让「表单改一个字要穿过 5 个事件」——那种代码无法维护。
  */
+/* eslint-disable vue/no-mutating-props */
+// ⬆ 本文件整文件豁免 vue/no-mutating-props：原地改共享 step 对象是上面的
+// 设计决策（嵌套深、逐层 emit 不可维护），父组件 CaseEditorView 持有全部状态。
 import { computed } from 'vue'
 
 import { BODY_TYPES } from '@/api'

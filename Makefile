@@ -11,9 +11,9 @@
 
 GO ?= go
 
-.PHONY: check fmt-check vet test web-test web-typecheck
+.PHONY: check fmt-check vet test coverage-gate web-lint web-test web-typecheck
 
-check: fmt-check vet test web-test web-typecheck
+check: fmt-check vet test coverage-gate web-lint web-test web-typecheck
 	@echo ""
 	@echo "==== check 全部通过 ===="
 
@@ -31,6 +31,14 @@ vet:
 test:
 	@echo "==== go test -cover ===="
 	$(GO) test -cover ./...
+
+coverage-gate:
+	@echo "==== 覆盖率门禁 ===="
+	bash scripts/coverage-gate.sh
+
+web-lint:
+	@echo "==== 前端 ESLint ===="
+	cd web && npm run lint
 
 web-test:
 	@echo "==== 前端单测（vitest） ===="

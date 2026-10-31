@@ -1,24 +1,45 @@
-# 流水线门槛：docs/项目进度检查报告.md 建议二（CI 固化本轮检查）。
+# 流水线门槛：docs/项目进度检查报告.md 建议二（CI 固化本轮检查）+ P0/P1 改进。
 #
-# 后端与前端拆成两个 job 并行跑；步骤与 Makefile 的 `make check`、
-# 本地 `bash scripts/check.sh` 完全同源：
-#   gofmt -l / go vet / go test -cover / vitest / vue-tsc
+# 结构（与 Makefile 的 make check、本地 bash scripts/check.sh 同源）：
+#   backend  —— 双 OS 矩阵（ubuntu + windows）：gofmt / vet / test -cover / 覆盖率门禁
+#   frontend —— npm ci / ESLint / vitest / build（含 vue-tsc）/ 产物归档
+#   security —— gitleaks 全历史密钥扫描
+#
+# P0：路径过滤（纯文档改动不跑）、Go 缓存、前端构建进 CI。
+# P1：OS 矩阵（今晚教训：Windows 绿 ≠ Linux 绿，反过来也一样）、
+#     覆盖率门禁（只能涨不能跌）、gitleaks。
 name: check
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    strategy:
+      # 一个 OS 失败不取消另一个：双平台的信号都要拿全。
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # windows runner 默认是 pwsh，步骤里全是 bash 语法，统一成 bash。
+        shell: bash
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: gofmt -l（有任何未格式化文件即失败）
         run: |
@@ -30,6 +51,9 @@ jobs:
 
       - name: go test -cover
         run: go test -cover ./...
+
+      - name: 覆盖率门禁（各包不得低于既有水位）
+        run: bash scripts/coverage-gate.sh
 
   frontend:
     runs-on: ubuntu-latest
@@ -48,8 +72,31 @@ jobs:
       - name: 安装依赖（npm ci 按 lock 精确安装）
         run: npm ci
 
+      - name: ESLint
+        run: npm run lint
+
       - name: 前端单测（vitest）
         run: npm test
 
-      - name: 前端类型（vue-tsc）
-        run: npm run typecheck
+      - name: 前端构建（vue-tsc + vite build）
+        run: npm run build
+
+      - name: 上传构建产物（7 天可下载试玩）
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 7
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # gitleaks 扫 push 的全量提交历史需要完整 clone。
+          fetch-depth: 0
+
+      - name: gitleaks 密钥泄漏扫描
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

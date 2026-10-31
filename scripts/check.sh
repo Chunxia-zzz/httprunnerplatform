@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 本地一键检查：与 Makefile 的 make check 完全同源。
+# 本地一键检查：与 .github/workflows/check.yml 完全同源。
 #
 # Windows 上没有 make，Git Bash 直接跑这个：
 #   bash scripts/check.sh
@@ -16,7 +16,7 @@ if ! command -v go >/dev/null 2>&1; then
   source scripts/dev-env.sh >/dev/null
 fi
 
-echo "==== 1/5 gofmt -l（应无输出） ===="
+echo "==== 1/7 gofmt -l（应无输出） ===="
 out="$(gofmt -l .)"
 if [ -n "$out" ]; then
   echo "$out"
@@ -26,22 +26,31 @@ fi
 echo "OK：所有 .go 文件已格式化"
 
 echo ""
-echo "==== 2/5 go vet ===="
+echo "==== 2/7 go vet ===="
 go vet ./...
 echo "OK"
 
 echo ""
-echo "==== 3/5 go test -cover ===="
+echo "==== 3/7 go test -cover ===="
 go test -cover ./...
 echo "OK"
 
 echo ""
-echo "==== 4/5 前端单测（vitest） ===="
+echo "==== 4/7 覆盖率门禁 ===="
+bash scripts/coverage-gate.sh | tail -1
+
+echo ""
+echo "==== 5/7 前端 ESLint ===="
+(cd web && npm run lint)
+echo "OK"
+
+echo ""
+echo "==== 6/7 前端单测（vitest） ===="
 (cd web && npm test)
 echo "OK"
 
 echo ""
-echo "==== 5/5 前端类型（vue-tsc） ===="
+echo "==== 7/7 前端类型（vue-tsc） ===="
 (cd web && npm run typecheck)
 echo "OK"
 
