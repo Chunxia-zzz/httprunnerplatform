@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -333,12 +334,17 @@ func TestEffectiveLimit(t *testing.T) {
 
 func TestCsvBaseName(t *testing.T) {
 	// 兼容 Windows / Unix 分隔符（存库统一为 data/<name>）。
-	for in, want := range map[string]string{
+	// 反斜杠在 Windows 上是分隔符、在 Linux 上是合法文件名字符，
+	// 所以这条用例只在 Windows 下断言（CI 的 ubuntu 跑不到它）。
+	cases := map[string]string{
 		"users.csv":   "users.csv",
 		"data/xx.csv": "xx.csv",
-		`data\yy.csv`: "yy.csv",
 		"a/b/c.csv":   "c.csv",
-	} {
+	}
+	if runtime.GOOS == "windows" {
+		cases[`data\yy.csv`] = "yy.csv"
+	}
+	for in, want := range cases {
 		if got := csvBaseName(in); got != want {
 			t.Errorf("csvBaseName(%q) = %q，应 %q", in, got, want)
 		}

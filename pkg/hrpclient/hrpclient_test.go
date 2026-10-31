@@ -89,7 +89,8 @@ func TestResolve约定路径兜底(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := filepath.Join(binDir, BinaryName())
-	if err := os.WriteFile(want, []byte("x"), 0o644); err != nil {
+	// 0755：Linux 下 isExecutable 检查 x 位；Windows 忽略权限位，无影响。
+	if err := os.WriteFile(want, []byte("x"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(EnvToolsRoot, root)

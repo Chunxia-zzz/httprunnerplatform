@@ -127,7 +127,7 @@ func findHrpForTest(t *testing.T) bool {
 		return false
 	}
 	for i := 0; i < 6; i++ {
-		cand := filepath.Join(dir, "httprunnerplatform-tools", "bin", "hrp.exe")
+		cand := filepath.Join(dir, "httprunnerplatform-tools", "bin", hrpclient.BinaryName())
 		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
 			t.Setenv("HRP_BINARY_PATH", cand)
 			return true
