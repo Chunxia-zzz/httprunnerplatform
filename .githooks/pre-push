@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# pre-push 本地门禁：单分支直推 main 的补偿措施 —— CI 失败只能事后发现，
+# 这里先拦一道，减少「push 后才红」的往返。
+# 启用方式（一次性）：git config core.hooksPath .githooks
+# 紧急跳过：git push --no-verify（CI 仍会拦住镜像构建）
+set -e
+echo "[pre-push] 运行 scripts/check.sh ..."
+bash scripts/check.sh

@@ -69,11 +69,8 @@ log:
   level: info # debug | info | warn | error
   json: true
 
-notify:
-  webhook:
-    enabled: false
-    url: ""
-
 auth:
-  jwt_secret: "change-me-in-production"
+  # ⭐ 字段名是 session_secret（internal/config/config.go 的 yaml tag）。
+  #    生产环境必须替换为随机值：openssl rand -base64 32
+  session_secret: "change-me-in-production"
   token_ttl_hours: 24

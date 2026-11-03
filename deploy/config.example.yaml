@@ -1,0 +1,43 @@
+# httprunnerplatform 容器部署配置样例
+#
+# 用法：cp deploy/config.example.yaml deploy/config.yaml 后改 session_secret。
+# deploy/config.yaml 已被 .gitignore 忽略（本地真实配置不入库），
+# 由 docker-compose.yml 以只读方式挂载到容器的 /app/configs/config.yaml。
+#
+# 容器内路径固定值与 Dockerfile 的 ENV 对应：
+#   HRP_BINARY_PATH=/usr/local/bin/hrp
+#   HRP_PLATFORM_CONFIG=/app/configs/config.yaml
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  mode: release
+  auto_migrate: true
+
+database:
+  # 容器内数据卷挂载点：/app/data（命名卷 hrp-data，勿绑定 Windows 目录）
+  driver: sqlite
+  dsn: "/app/data/platform.db"
+  max_open_conns: 20
+  max_idle_conns: 5
+
+engine:
+  # 留空 = 使用环境变量 HRP_BINARY_PATH（Dockerfile 已指向 /usr/local/bin/hrp）
+  binary_path: ""
+  default_case_timeout: 300
+  max_concurrency: 3
+  disable_telemetry: true
+  python_venv: ""
+
+workspace:
+  root: /app/data
+  run_retention_days: 90
+
+log:
+  level: info
+  json: true
+
+auth:
+  # ⭐ 必改：openssl rand -base64 32（字段名以 internal/config/config.go 为准）
+  session_secret: "change-me-in-production"
+  token_ttl_hours: 24

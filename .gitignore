@@ -80,3 +80,6 @@ results/
 __pycache__/
 .debugtalk_gen.py
 .coverage-tmp.out
+
+# 容器部署的本地真实配置（只提交 deploy/config.example.yaml）
+/deploy/config.yaml

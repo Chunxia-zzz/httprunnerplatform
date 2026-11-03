@@ -21,6 +21,11 @@ on:
       - 'docs/**'
       - '**/*.md'
 
+# 连续 push 时排队而不是并行（image job 产出的 latest 不被旧 run 覆盖）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   backend:
     strategy:
@@ -100,3 +105,56 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  image:
+    # ⭐ 门禁：三组检查 job 全部成功才会执行 —— 检查失败就不产出镜像
+    needs: [backend, frontend, security]
+    # 只在 main 的 push 上构建发布；PR 只跑检查
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: meta
+        name: 计算镜像名（GHCR 要求全小写）
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          echo "image=ghcr.io/${repo}" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.short }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 镜像冒烟（起容器 → healthz）
+        run: |
+          img="${{ steps.meta.outputs.image }}:${{ github.sha }}"
+          docker run -d --name smoke -p 8080:8080 "$img"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/api/v1/healthz; then echo; echo "healthz OK"; exit 0; fi
+            sleep 2
+          done
+          docker logs smoke
+          exit 1
