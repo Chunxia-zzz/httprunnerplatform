@@ -146,6 +146,11 @@ type Input struct {
 	// 用途：保存单个用例时也要能发现重名（实测 F11：引擎以 config.name
 	// 作唯一标识，重名会让 summary.json 的结果无法区分）。
 	SiblingCaseNames map[string]string
+	// APIs 是**本项目**的接口定义，按 ID 索引（F1 接口引用）。
+	//
+	// 只放本项目：跨项目引用在查找时自然落空，得到「不存在或不属于本项目」
+	// 的同一条错误——不需要在这里单独判断项目归属。
+	APIs map[uint64]*model.APIDef
 }
 
 // Validate 执行全部语义校验。
@@ -270,28 +275,70 @@ func validateStep(r *Result, in *Input, tc *model.TestCase, st model.TestStep, s
 	switch st.StepType {
 	case model.StepRequest, "":
 		validateRequestStep(r, st, stepScope, extractNames)
-	case model.StepAPI, model.StepTestCase:
-		// 引用型步骤
-		if st.StepType == model.StepAPI && st.RefAPIID == 0 {
-			r.errf(ScopeStep, st.Seq, "ref_api_id", CodeUnresolvedRef,
-				"请选择一个接口定义，或把步骤类型改为「直接请求」",
-				"步骤「%s」声明为接口引用，但未选择接口", st.Name)
-		}
-		if st.StepType == model.StepTestCase && st.RefCaseID == 0 {
+	case model.StepAPI:
+		validateAPIStep(r, st, in, stepScope, extractNames)
+	case model.StepTestCase:
+		// 用例引用尚未开放（F1 只做接口引用）。
+		if st.RefCaseID == 0 {
 			r.errf(ScopeStep, st.Seq, "ref_case_id", CodeUnresolvedRef,
 				"请选择一个用例，或把步骤类型改为「直接请求」",
 				"步骤「%s」声明为用例引用，但未选择用例", st.Name)
 		}
 		r.errf(ScopeStep, st.Seq, "step_type", CodeUnsupportedStepType,
-			"该步骤类型计划在 M2 支持，M1 请使用「直接请求」",
-			"步骤「%s」的类型 %q 在 M1 尚未开放", st.Name, st.StepType)
+			"用例引用待后续里程碑支持，当前请使用「直接请求」或「引用接口」",
+			"步骤「%s」的类型 %q 尚未开放", st.Name, st.StepType)
 	default:
 		r.errf(ScopeStep, st.Seq, "step_type", CodeUnsupportedStepType,
-			"M1 只支持「直接请求」步骤",
+			"当前支持「直接请求」与「引用接口」",
 			"步骤「%s」的类型 %q 不受支持", st.Name, st.StepType)
 	}
 
 	checkHooks(r, st)
+}
+
+// validateAPIStep 校验「引用接口」步骤。
+//
+// 与直接请求的区别只在请求内容的来源：它来自接口定义，所以这里校验的是
+// **接口定义里的字段**（路径/头/参数/body 的变量引用、body_type、尾斜杠提示），
+// 再复用与请求步骤完全相同的提取/断言检查——断言永远属于步骤，不属于接口。
+func validateAPIStep(r *Result, st model.TestStep, in *Input, scope *varScope, extractNames map[string]bool) {
+	if st.RefAPIID == 0 {
+		r.errf(ScopeStep, st.Seq, "ref_api_id", CodeUnresolvedRef,
+			"请选择一个接口定义，或把步骤类型改为「直接请求」",
+			"步骤「%s」声明为接口引用，但未选择接口", st.Name)
+		return
+	}
+	api, ok := in.APIs[st.RefAPIID]
+	if !ok || api == nil {
+		r.errf(ScopeStep, st.Seq, "ref_api_id", CodeUnresolvedRef,
+			"引用的接口不存在或不属于本项目，请重新选择",
+			"步骤「%s」引用的接口（id=%d）无法解析", st.Name, st.RefAPIID)
+		return
+	}
+
+	if strings.TrimSpace(api.Path) == "" {
+		r.errf(ScopeStep, st.Seq, "ref_api_id", CodeMissingURL,
+			"接口定义缺少路径，请到接口库补全",
+			"步骤「%s」引用的接口 %q 没有路径", st.Name, api.Code)
+	}
+
+	switch strings.ToLower(api.BodyType) {
+	case "", model.BodyTypeNone, model.BodyTypeJSON, model.BodyTypeForm, model.BodyTypeRaw:
+	default:
+		r.errf(ScopeStep, st.Seq, "ref_api_id", CodeInvalidBodyType,
+			"接口定义的请求体类型只能是 json / form / raw / none",
+			"步骤「%s」引用的接口 %q 请求体类型 %q 不受支持", st.Name, api.Code, api.BodyType)
+	}
+
+	checkTrailingSlash(r, st, model.RequestSpec{URL: api.Path, Params: api.Params})
+
+	// 接口定义里的变量引用同样要能解析——否则执行时才报错
+	checkRefsIn(r, ScopeStep, st.Seq, "ref.url", api.Path, scope)
+	checkRefsIn(r, ScopeStep, st.Seq, "ref.params", api.Params, scope)
+	checkRefsIn(r, ScopeStep, st.Seq, "ref.headers", api.Headers, scope)
+	checkRefsIn(r, ScopeStep, st.Seq, "ref.body", api.Body.Val, scope)
+
+	validateExtractAndAssert(r, st, scope, extractNames)
 }
 
 func validateRequestStep(r *Result, st model.TestStep, scope *varScope, extractNames map[string]bool) {
@@ -324,6 +371,12 @@ func validateRequestStep(r *Result, st model.TestStep, scope *varScope, extractN
 	checkRefsIn(r, ScopeStep, st.Seq, "headers", req.Headers, scope)
 	checkRefsIn(r, ScopeStep, st.Seq, "body", req.Body.Val, scope)
 
+	validateExtractAndAssert(r, st, scope, extractNames)
+}
+
+// validateExtractAndAssert 校验提取项与断言 —— 请求步骤与接口引用步骤共用。
+// 断言永远属于步骤而不属于接口：引用接口后断言仍需按步骤校验。
+func validateExtractAndAssert(r *Result, st model.TestStep, scope *varScope, extractNames map[string]bool) {
 	// --- 提取项 ---
 	for _, it := range st.Extract {
 		name := strings.TrimSpace(it.Name)

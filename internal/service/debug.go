@@ -174,12 +174,17 @@ func (s *DebugService) DebugStep(ctx context.Context, req DebugStepRequest) (*De
 	if err != nil {
 		return nil, err
 	}
+	apis, err := loadAPIs(s.DB, project.ID)
+	if err != nil {
+		return nil, err
+	}
 	comp, err := compiler.Render(&compiler.Input{
 		Project:       project,
 		Env:           env,
 		Cases:         []compiler.CaseSpec{{Case: &debugCase, Steps: prefix}},
 		WorkspaceRoot: projectWorkspace(s.Cfg, project),
 		Datasets:      datasets,
+		APIs:          apis,
 	})
 	if err != nil {
 		return &DebugStepResult{

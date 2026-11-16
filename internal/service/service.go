@@ -52,6 +52,7 @@ type Set struct {
 	Import      *ImportService
 	Export      *ExportService
 	Baseline    *BaselineService
+	API         *APIService
 }
 
 // New 构造全部 service。
@@ -72,6 +73,7 @@ func New(d Deps) *Set {
 		Import:      NewImportService(d, caseSvc),
 		Export:      NewExportService(d),
 		Baseline:    NewBaselineService(d),
+		API:         &APIService{Deps: d},
 	}
 }
 

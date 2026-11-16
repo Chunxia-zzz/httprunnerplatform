@@ -249,7 +249,7 @@ func (s *CaseService) Create(projectID uint64, req CaseReq, ownerID uint64) (*Ca
 	}
 	tc.OwnerID = ownerID
 
-	steps, err := s.buildSteps(req.Steps)
+	steps, err := s.buildSteps(projectID, req.Steps)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +304,7 @@ func (s *CaseService) Update(id uint64, req CaseReq) (*CaseDetail, error) {
 	tc.LastRunID = old.LastRunID
 	tc.LastStatus = old.LastStatus
 
-	steps, err := s.buildSteps(req.Steps)
+	steps, err := s.buildSteps(old.ProjectID, req.Steps)
 	if err != nil {
 		return nil, err
 	}
@@ -393,12 +393,17 @@ func (s *CaseService) RenderYAML(id, envID uint64) (*YAMLPreview, error) {
 	if err != nil {
 		return nil, err
 	}
+	apis, err := loadAPIs(s.DB, tc.ProjectID)
+	if err != nil {
+		return nil, err
+	}
 	out, err := compiler.Render(&compiler.Input{
 		Project:       project,
 		Env:           env,
 		Cases:         []compiler.CaseSpec{{Case: tc, Steps: steps}},
 		WorkspaceRoot: projectWorkspace(s.Cfg, project),
 		Datasets:      datasets,
+		APIs:          apis,
 	})
 	if err != nil {
 		return nil, response.Wrap(response.CodeCompileFail, "编译失败："+err.Error(), err)
@@ -469,11 +474,16 @@ func (s *CaseService) Validate(id, envID uint64) (*ValidateOutcome, error) {
 	if err != nil {
 		return nil, err
 	}
+	apis, err := loadAPIs(s.DB, tc.ProjectID)
+	if err != nil {
+		return nil, err
+	}
 
 	vr := validator.Validate(&validator.Input{
 		Env:              env,
 		Cases:            []validator.CaseSpec{{Case: tc, Steps: steps}},
 		SiblingCaseNames: siblings,
+		APIs:             apis,
 	})
 	out := &ValidateOutcome{Issues: vr.Issues}
 
@@ -494,6 +504,7 @@ func (s *CaseService) Validate(id, envID uint64) (*ValidateOutcome, error) {
 		Cases:         []compiler.CaseSpec{{Case: tc, Steps: steps}},
 		WorkspaceRoot: projectWorkspace(s.Cfg, project),
 		Datasets:      datasets,
+		APIs:          apis,
 	})
 	if err != nil {
 		return nil, response.Wrap(response.CodeCompileFail, "编译失败："+err.Error(), err)
@@ -590,15 +601,54 @@ func (s *CaseService) buildCase(projectID uint64, req CaseReq, selfID uint64) (*
 	}, nil
 }
 
+// validateAPIRefs 校验接口引用步骤的 ref_api_id：存在且属于本项目。
+//
+// 只校验「结构性」问题（引用指向哪里），不校验接口内容是否合理——
+// 后者由校验器在保存后的 validate 与执行前检查里报告。
+func (s *CaseService) validateAPIRefs(projectID uint64, steps []StepReq) error {
+	var ids []uint64
+	for _, st := range steps {
+		if normalizeStepType(st.StepType) == model.StepAPI {
+			if st.RefAPIID == 0 {
+				return errBadParam("步骤 %q 声明为接口引用，但未选择接口", strings.TrimSpace(st.Name))
+			}
+			ids = append(ids, st.RefAPIID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var found []model.APIDef
+	if err := s.DB.Where("project_id = ? AND id IN ?", projectID, ids).Find(&found).Error; err != nil {
+		return errInternal("查询接口定义失败", err)
+	}
+	ok := make(map[uint64]bool, len(found))
+	for _, a := range found {
+		ok[a.ID] = true
+	}
+	for _, id := range ids {
+		if !ok[id] {
+			return errBadParam("引用的接口不存在或不属于本项目（id=%d），请重新选择", id)
+		}
+	}
+	return nil
+}
+
 // buildSteps 把请求步骤转成模型步骤，并归一化 seq。
 //
 // seq 归一化策略：按请求给出的 seq 稳定排序后**重编号为 1..n**。
 // 理由：引擎按 seq 升序执行，而前端拖拽排序后很容易产生
 // 10/20/30 这类间隔值或顺序错乱；由服务端统一重排可以让
 // "数组顺序 = 执行顺序" 这个直觉永远成立，也让 step_result.seq 干净可读。
-func (s *CaseService) buildSteps(in []StepReq) ([]model.TestStep, error) {
+func (s *CaseService) buildSteps(projectID uint64, in []StepReq) ([]model.TestStep, error) {
 	if len(in) == 0 {
 		return nil, nil
+	}
+
+	// 接口引用（F1）在保存侧就校验存在性与项目归属：
+	// 不留到编译期才发现「引用了别的项目的接口」。
+	if err := s.validateAPIRefs(projectID, in); err != nil {
+		return nil, err
 	}
 
 	// 稳定排序：seq 相同或为 0 的按原数组顺序排在后面。

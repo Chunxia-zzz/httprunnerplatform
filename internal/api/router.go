@@ -74,6 +74,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 
 		registerProjectRoutes(authed, deps)
 		registerEnvironmentRoutes(authed, deps)
+		registerAPIDefRoutes(authed, deps)
 		registerCaseRoutes(authed, deps)
 		registerDebugRoutes(authed, deps)
 		registerParamRoutes(authed, deps)
@@ -135,6 +136,18 @@ func registerEnvironmentRoutes(g *gin.RouterGroup, deps *Deps) {
 	g.GET("/environments/:id", h.Get)
 	g.PUT("/environments/:id", h.Update)
 	g.DELETE("/environments/:id", h.Delete)
+}
+
+// registerAPIDefRoutes 注册接口定义库路由（F1：项目 → 服务/模块 → 接口）。
+func registerAPIDefRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newAPIDefHandler(deps)
+	g.GET("/projects/:id/apis", h.List)
+	g.POST("/projects/:id/apis", h.Create)
+	g.GET("/projects/:id/apis/tree", h.Tree)
+
+	g.GET("/apis/:id", h.Get)
+	g.PUT("/apis/:id", h.Update)
+	g.DELETE("/apis/:id", h.Delete)
 }
 
 // registerCaseRoutes 注册用例与步骤相关路由。

@@ -255,12 +255,19 @@ func (s *RunService) execute(ctx context.Context, job *runJob) {
 		s.finish(job, err.Error(), model.RunError, started)
 		return
 	}
+	// 接口引用（F1）需要在编译期解析：与 Datasets 同一模式，先查好传入。
+	apis, err := loadAPIs(s.DB, job.project.ID)
+	if err != nil {
+		s.finish(job, err.Error(), model.RunError, started)
+		return
+	}
 	comp, err := compiler.Compile(&compiler.Input{
 		Project:       job.project,
 		Env:           job.env,
 		Cases:         []compiler.CaseSpec{{Case: job.tc, Steps: steps}},
 		WorkspaceRoot: projectWS,
 		Datasets:      datasets,
+		APIs:          apis,
 	}, projectWS)
 	if err != nil {
 		s.finish(job, "编译失败："+err.Error(), model.RunError, started)

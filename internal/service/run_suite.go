@@ -271,6 +271,11 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 		s.finishSuite(job, nil, model.RunError, err.Error(), started, len(job.specs))
 		return
 	}
+	apis, err := loadAPIs(s.DB, job.project.ID)
+	if err != nil {
+		s.finishSuite(job, nil, model.RunError, err.Error(), started, len(job.specs))
+		return
+	}
 	type planned struct {
 		tc *model.TestCase
 		cc compiler.CompiledCase
@@ -284,6 +289,7 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 			Cases:         []compiler.CaseSpec{spec},
 			WorkspaceRoot: projectWS,
 			Datasets:      datasets,
+			APIs:          apis,
 		}, projectWS)
 		if err != nil {
 			compileErrors = append(compileErrors, suiteOutcome{

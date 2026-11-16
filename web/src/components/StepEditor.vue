@@ -11,7 +11,7 @@
 // 设计决策（嵌套深、逐层 emit 不可维护），父组件 CaseEditorView 持有全部状态。
 import { computed } from 'vue'
 
-import { BODY_TYPES } from '@/api'
+import { BODY_TYPES, type APIDef } from '@/api'
 import AssertEditor from '@/components/AssertEditor.vue'
 import ExtractEditor from '@/components/ExtractEditor.vue'
 import KeyValueEditor from '@/components/KeyValueEditor.vue'
@@ -25,6 +25,8 @@ const props = defineProps<{
   total: number
   /** 本步骤可见的已定义变量集合（M3 ③-c 4.3），由父组件跨步骤计算 */
   definedVars?: string[]
+  /** 本项目接口库（F1）：引用接口时选择用 */
+  apis?: APIDef[]
 }>()
 
 const emit = defineEmits<{
@@ -34,7 +36,31 @@ const emit = defineEmits<{
   (e: 'debug', index: number): void
 }>()
 
-const slashWarning = computed(() => willAppendTrailingSlash(props.step.url, props.step.params))
+const slashWarning = computed(() =>
+  props.step.stepType === 'api' ? false : willAppendTrailingSlash(props.step.url, props.step.params),
+)
+
+/** 当前引用的接口（引用型步骤的摘要展示）。 */
+const selectedApi = computed(() => {
+  if (props.step.stepType !== 'api' || !props.step.refApiId) return null
+  return (props.apis ?? []).find((a) => a.id === props.step.refApiId) ?? null
+})
+
+/** 引用接口的选项按模块分组。 */
+const apiGroups = computed(() => {
+  const byModule = new Map<string, APIDef[]>()
+  for (const a of props.apis ?? []) {
+    const m = (a.module || '未分类').trim()
+    if (!byModule.has(m)) byModule.set(m, [])
+    byModule.get(m)!.push(a)
+  }
+  return [...byModule.entries()].sort((x, y) => x[0].localeCompare(y[0]))
+})
+
+/** 切换类型：切回直接请求时清掉引用，避免留下不一致的草稿。 */
+function onTypeChange(t: string) {
+  if (t === 'request') props.step.refApiId = null
+}
 
 /**
  * 本步骤引用了但未定义的变量（M3 ③-c 4.3）。
@@ -108,6 +134,10 @@ function formatJson() {
       <div class="step__title">
         <el-tag size="small" type="info" effect="plain">#{{ index + 1 }}</el-tag>
         <el-input v-model="step.name" placeholder="步骤名称（留空则由编译器生成「步骤 N」）" class="step__name" />
+        <el-select v-model="step.stepType" class="step__type" @change="onTypeChange">
+          <el-option label="直接请求" value="request" />
+          <el-option label="引用接口" value="api" />
+        </el-select>
         <el-switch v-model="step.enabled" active-text="启用" inline-prompt />
         <span v-if="!step.enabled" class="hrp-muted step__off-hint">
           禁用步骤不会出现在编译产物里（引擎没有"跳过步骤"语法）
@@ -128,7 +158,40 @@ function formatJson() {
 
     <el-divider class="step__divider" />
 
-    <div class="row">
+    <template v-if="step.stepType === 'api'">
+      <div class="row row--api">
+        <el-select
+          v-model="step.refApiId"
+          class="row__api"
+          filterable
+          placeholder="选择一个接口定义"
+        >
+          <el-option-group v-for="[mod, list] in apiGroups" :key="mod" :label="mod">
+            <el-option
+              v-for="a in list"
+              :key="a.id"
+              :label="`${a.method} ${a.path}`"
+              :value="a.id"
+            />
+          </el-option-group>
+        </el-select>
+        <el-tag v-if="selectedApi" size="small" effect="plain">{{ selectedApi.method }}</el-tag>
+        <span v-if="selectedApi" class="hrp-mono hrp-muted row__api-path">{{ selectedApi.path }}</span>
+        <el-button link type="primary" @click="step.stepType = 'request'; step.refApiId = null">
+          解除引用
+        </el-button>
+      </div>
+      <div class="hrp-muted note">
+        请求内容来自接口库里的定义（改接口定义，所有引用它的步骤下次执行自动生效）。
+        断言、提取与变量仍属于本步骤，可在下方页签编辑。
+      </div>
+      <el-alert v-if="!step.refApiId" type="info" show-icon :closable="false" class="step__alert">
+        <template #title>还没有选择接口</template>
+        引用型步骤必须选择一个接口才能保存与执行；也可以点「解除引用」改为直接写请求。
+      </el-alert>
+    </template>
+
+    <div v-else class="row">
       <el-select v-model="step.method" class="row__method">
         <el-option v-for="m in HTTP_METHODS" :key="m" :label="m" :value="m" />
       </el-select>
@@ -163,19 +226,19 @@ function formatJson() {
     </el-alert>
 
     <el-tabs class="step__tabs">
-      <el-tab-pane label="请求头">
+      <el-tab-pane v-if="step.stepType !== 'api'" label="请求头">
         <KeyValueEditor v-model="step.headers" key-placeholder="Header 名" />
         <div class="hrp-muted note">
           请求头按「环境全局头 → 用例头 → 步骤头」合并，后者覆盖前者（大小写不敏感去重）。这里只需写本步骤特有的。
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="查询参数">
+      <el-tab-pane v-if="step.stepType !== 'api'" label="查询参数">
         <KeyValueEditor v-model="step.params" key-placeholder="参数名" />
         <div class="hrp-muted note">参数为空时，引擎会给 URL 补结尾斜杠（见上方提示）。</div>
       </el-tab-pane>
 
-      <el-tab-pane label="请求体">
+      <el-tab-pane v-if="step.stepType !== 'api'" label="请求体">
         <el-radio-group v-model="step.bodyType" class="body-type">
           <el-radio-button v-for="t in BODY_TYPES" :key="t" :value="t">{{ t }}</el-radio-button>
         </el-radio-group>
@@ -218,6 +281,25 @@ function formatJson() {
 </template>
 
 <style scoped>
+.step__type {
+  width: 110px;
+  flex: none;
+}
+.row--api {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row__api {
+  width: 420px;
+  flex: none;
+}
+.row__api-path {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .step {
   margin-bottom: 12px;
 }

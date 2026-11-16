@@ -295,21 +295,51 @@ func TestValidate_同名步骤只告警(t *testing.T) {
 	}
 }
 
-func TestValidate_M1不支持的步骤类型与hooks(t *testing.T) {
+func TestValidate_接口引用步骤(t *testing.T) {
+	// 未选接口：结构性问题，必须是 error。
 	apiStep := reqStep(1, "", nil)
 	apiStep.StepType = model.StepAPI
 	res := Validate(&Input{Env: newEnv(), Cases: []CaseSpec{{Case: newCase(), Steps: []model.TestStep{apiStep}}}})
-	if !hasCodeAtLevel(res, CodeUnsupportedStepType, LevelError) {
-		t.Errorf("M1 未开放的步骤类型应报错: %+v", res.Issues)
+	if !hasCodeAtLevel(res, CodeUnresolvedRef, LevelError) {
+		t.Errorf("未选择接口的引用步骤应报 UNRESOLVED_REF: %+v", res.Issues)
 	}
 
-	// hooks 需要自定义函数，M1 配了也不会生效 —— 必须报错而不是静默放行
+	// 选了但不存在的接口（含跨项目——APIs 只放本项目）：同样 UNRESOLVED_REF。
+	apiStep.RefAPIID = 999
+	res = Validate(&Input{
+		Env:   newEnv(),
+		APIs:  map[uint64]*model.APIDef{1: {SoftBase: model.SoftBase{Base: model.Base{ID: 1}}, Code: "get_user", Method: "GET", Path: "$base_url/users/1"}},
+		Cases: []CaseSpec{{Case: newCase(), Steps: []model.TestStep{apiStep}}},
+	})
+	if !hasCodeAtLevel(res, CodeUnresolvedRef, LevelError) {
+		t.Errorf("悬空引用应报 UNRESOLVED_REF: %+v", res.Issues)
+	}
+
+	// 能解析：不再有 error；但缺断言仍要告警（断言属于步骤）。
+	okStep := reqStep(1, "", nil)
+	okStep.StepType = model.StepAPI
+	okStep.RefAPIID = 1
+	res = Validate(&Input{
+		Env:   newEnv(),
+		APIs:  map[uint64]*model.APIDef{1: {SoftBase: model.SoftBase{Base: model.Base{ID: 1}}, Code: "get_user", Method: "GET", Path: "$base_url/users/1"}},
+		Cases: []CaseSpec{{Case: newCase(), Steps: []model.TestStep{okStep}}},
+	})
+	if !res.OK() {
+		t.Fatalf("可解析的接口引用不应有 error: %+v", res.Issues)
+	}
+	if !hasCodeAtLevel(res, CodeNoValidate, LevelWarning) {
+		t.Errorf("引用接口的步骤缺断言应告警: %+v", res.Issues)
+	}
+}
+
+func TestValidate_hooks仍拒绝(t *testing.T) {
+	// hooks 需要自定义函数，当前版本配了也不会生效 —— 必须报错而不是静默放行
 	// （实测 A13：引擎对无效配置是静默忽略，平台若不拦，用户会以为配了）
 	hookStep := reqStep(1, "$base_url/get", nil)
 	hookStep.Hooks = anyOf(map[string]any{"setup": []any{"${before()}"}})
-	res = Validate(&Input{Env: newEnv(), Cases: []CaseSpec{{Case: newCase(), Steps: []model.TestStep{hookStep}}}})
+	res := Validate(&Input{Env: newEnv(), Cases: []CaseSpec{{Case: newCase(), Steps: []model.TestStep{hookStep}}}})
 	if !hasCodeAtLevel(res, CodeCustomFuncUnsupported, LevelError) {
-		t.Fatalf("hooks 在 M1 应报错: %+v", res.Issues)
+		t.Fatalf("hooks 应报错: %+v", res.Issues)
 	}
 }
 

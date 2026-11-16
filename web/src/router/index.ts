@@ -36,6 +36,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '参数化数据集' },
       },
       {
+        // 接口库是「用例引用」的数据层，排在用例之前
+        path: 'apis',
+        name: 'apis',
+        component: () => import('@/views/ApiLibraryView.vue'),
+        meta: { title: '接口库' },
+      },
+      {
         path: 'cases',
         name: 'cases',
         component: () => import('@/views/CaseListView.vue'),

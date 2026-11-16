@@ -234,6 +234,49 @@ export interface RequestSpec {
   timeout?: number
 }
 
+/** 接口定义（api_def，F1 接口库）。 */
+export interface APIDef {
+  id: ID
+  project_id: ID
+  /** 所属服务/模块；空串表示未分类 */
+  module: string
+  code: string
+  name: string
+  method: string
+  path: string
+  headers: EnvMap | null
+  params: EnvMap | null
+  body: unknown
+  body_type: BodyType | string
+  description: string
+  source: string
+  /** 派生：被多少个用例步骤引用（后端 GROUP BY 算出，不落库） */
+  used_by: number
+  created_at: string
+  updated_at: string
+}
+
+/** 按服务（module）聚合的一组接口。 */
+export interface APIGroup {
+  module: string
+  count: number
+  apis: APIDef[]
+}
+
+/** 创建/更新接口定义的请求（PUT 为全量覆盖）。 */
+export interface APIReq {
+  code: string
+  name?: string
+  module?: string
+  method: string
+  path: string
+  headers?: EnvMap | null
+  params?: EnvMap | null
+  body?: unknown
+  body_type?: string
+  description?: string
+}
+
 export interface TestStep {
   id: ID
   case_id: ID

@@ -379,9 +379,25 @@ type Environment struct {
 }
 
 // APIDef 是接口定义库中的接口（M2 启用，M1 建表）。
+// APIDef 的来源（M2 裁剪说明：导入器按来源打标，便于回看从哪来）。
+const (
+	APISourceManual = "manual"
+	APISourceHAR    = "har"
+	APISourceCurl   = "curl"
+	APISourceImport = "postman"
+)
+
+// HTTPMethods 是接口定义支持的请求方法（与前端 utils/dict.ts 的 HTTP_METHODS 对齐）。
+var HTTPMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+
 type APIDef struct {
 	SoftBase
-	ProjectID   uint64    `gorm:"not null;index" json:"project_id"`
+	ProjectID uint64 `gorm:"not null;index" json:"project_id"`
+	// Module 是接口所属的服务/模块名（如 user / order）。
+	// 与 TestCase.Module 的既有惯例一致：字符串分组，不单独建服务表——
+	// 30 人团队的服务数在 10 个量级，GROUP BY 足够，且避免为「服务」
+	// 引入独立 CRUD 生命周期。空串表示「未分类」。
+	Module      string    `gorm:"size:64;not null;default:''" json:"module"`
 	Code        string    `gorm:"size:64;not null" json:"code"`
 	Name        string    `gorm:"size:128;not null" json:"name"`
 	Method      string    `gorm:"size:16;not null;default:'GET'" json:"method"`

@@ -85,6 +85,10 @@ func (s *ExportService) Export(projectID, envID uint64) ([]byte, string, error) 
 	if err != nil {
 		return nil, "", err
 	}
+	apis, err := loadAPIs(s.DB, projectID)
+	if err != nil {
+		return nil, "", err
+	}
 	projectWS := projectWorkspace(s.Cfg, project)
 
 	// 逐用例渲染：单用例失败不阻断导出，记进 README。
@@ -99,6 +103,7 @@ func (s *ExportService) Export(projectID, envID uint64) ([]byte, string, error) 
 			Cases:         []compiler.CaseSpec{{Case: tc, Steps: stepsByCase[tc.ID]}},
 			WorkspaceRoot: projectWS,
 			Datasets:      datasets,
+			APIs:          apis,
 		})
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("- %s：%s", tc.Code, err.Error()))

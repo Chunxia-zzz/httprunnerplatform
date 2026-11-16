@@ -53,6 +53,12 @@ type Input struct {
 	// 由调用方（service 层）在编译前一次性查好传入：compiler 是纯函数包，
 	// 不查库。引用了不存在的数据集时渲染会直接报错（resolveParameters）。
 	Datasets map[string]*model.ParamDataset
+	// APIs 是本项目全部接口定义，按 ID 索引（F1 接口引用）。
+	//
+	// 与 Datasets 同理：service 层查好传入，compiler 不查库。
+	// step_type=api 的步骤会按 ref_api_id 取出定义并**内联展开**为 request 步骤
+	// （不用引擎的 api/ 目录引用，保证导出产物自包含、可离线执行）。
+	APIs map[uint64]*model.APIDef
 }
 
 // CompiledCase 是单个用例的编译产物。
@@ -315,37 +321,43 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 		if err != nil {
 			return ys, decl, err
 		}
-		if strings.TrimSpace(req.URL) == "" {
-			return ys, decl, fmt.Errorf("请求步骤缺少 url")
-		}
-		decl.Method = strings.ToUpper(req.Method)
-		decl.URL = req.URL
-
-		yreq := &yamlRequest{
-			Method: strings.ToUpper(defaultString(req.Method, "GET")),
-			URL:    req.URL,
-		}
-		yreq.Headers = mergeStringMap(merged, req.Headers)
-		if len(req.Params) > 0 {
-			yreq.Params = req.Params
-		}
-		if req.Timeout > 0 {
-			// request 层才生效（实测 F13）；teststep 层的 timeout 会被静默忽略（F14）
-			yreq.Timeout = float64(req.Timeout)
-		}
-
-		if err := applyBody(yreq, req); err != nil {
+		if err := renderRequestInto(&ys, &decl, req, merged); err != nil {
 			return ys, decl, err
 		}
-		if len(yreq.Headers) == 0 {
-			yreq.Headers = nil
-		}
-		ys.Request = yreq
 
-	case model.StepAPI, model.StepTestCase:
-		// M2 才会开放；这里显式拒绝，避免产出引擎无法解析的文件。
+	case model.StepAPI:
+		// F1 接口引用：按 ref_api_id 取出接口定义，内联展开为 request。
+		//
+		// 选择内联而不是引擎的 `api/` 目录引用：导出的 YAML 必须自包含
+		// （可离线执行、可单文件带走），且不依赖引擎对 api 文件的查找约定。
+		// 代价是 YAML 里看不到「引用了哪个接口」——引用关系是平台层概念，
+		// 在用例详情/步骤声明里保留（StepDecl.StepType 仍为 api）。
+		if st.RefAPIID == 0 {
+			return ys, decl, fmt.Errorf("接口引用步骤缺少 ref_api_id")
+		}
+		api, ok := in.APIs[st.RefAPIID]
+		if !ok || api == nil {
+			return ys, decl, fmt.Errorf("接口引用步骤引用的接口不存在（id=%d）", st.RefAPIID)
+		}
+		if in.Project != nil && api.ProjectID != in.Project.ID {
+			return ys, decl, fmt.Errorf("接口引用步骤引用的接口不属于本项目（id=%d）", st.RefAPIID)
+		}
+		req := model.RequestSpec{
+			Method:   api.Method,
+			URL:      api.Path,
+			Headers:  api.Headers,
+			Params:   api.Params,
+			Body:     api.Body,
+			BodyType: api.BodyType,
+		}
+		if err := renderRequestInto(&ys, &decl, req, merged); err != nil {
+			return ys, decl, fmt.Errorf("接口 %s 的定义不完整: %w", api.Code, err)
+		}
+
+	case model.StepTestCase:
+		// 用例引用尚未开放（F1 只做接口引用，用例引用属后续里程碑）。
 		return ys, decl, fmt.Errorf(
-			"步骤类型 %q 在 M1 尚未开放（计划在 M2 支持接口/用例引用）", st.StepType)
+			"步骤类型 %q 尚未开放（当前只支持接口引用 api，用例引用待后续里程碑）", st.StepType)
 
 	default:
 		return ys, decl, fmt.Errorf("不支持的步骤类型 %q", st.StepType)
@@ -395,6 +407,41 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 }
 
 // applyBody 按 body_type 决定使用哪个请求体字段。
+// renderRequestInto 把一份请求声明渲染进步骤（同时回填声明信息）。
+//
+// 直接请求与接口引用共用这一条路径：两者唯一的区别是请求声明来自步骤本身
+// 还是来自接口定义——渲染规则必须完全一致，否则「引用」与「直接写」
+// 会产出不同的 YAML，引用就不可信了。
+func renderRequestInto(ys *yamlTestStep, decl *StepDecl, req model.RequestSpec, merged map[string]any) error {
+	if strings.TrimSpace(req.URL) == "" {
+		return fmt.Errorf("请求缺少 url")
+	}
+	decl.Method = strings.ToUpper(req.Method)
+	decl.URL = req.URL
+
+	yreq := &yamlRequest{
+		Method: strings.ToUpper(defaultString(req.Method, "GET")),
+		URL:    req.URL,
+	}
+	yreq.Headers = mergeStringMap(merged, req.Headers)
+	if len(req.Params) > 0 {
+		yreq.Params = req.Params
+	}
+	if req.Timeout > 0 {
+		// request 层才生效（实测 F13）；teststep 层的 timeout 会被静默忽略（F14）
+		yreq.Timeout = float64(req.Timeout)
+	}
+
+	if err := applyBody(yreq, req); err != nil {
+		return err
+	}
+	if len(yreq.Headers) == 0 {
+		yreq.Headers = nil
+	}
+	ys.Request = yreq
+	return nil
+}
+
 func applyBody(dst *yamlRequest, src model.RequestSpec) error {
 	switch src.BodyType {
 	case "", model.BodyTypeNone:

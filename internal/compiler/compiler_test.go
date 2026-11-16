@@ -576,15 +576,92 @@ func TestRender_没有启用步骤时报错(t *testing.T) {
 	}
 }
 
-func TestRender_M1不开放的步骤类型要显式拒绝(t *testing.T) {
+func TestRender_接口引用内联展开(t *testing.T) {
 	tc, steps := newCase()
 	steps[0].StepType = model.StepAPI
+	steps[0].RefAPIID = 7
+	steps[0].Name = "引用登录接口"
 
+	api := &model.APIDef{
+		ProjectID: 1,
+		Code:      "user_login",
+		Name:      "登录",
+		Method:    "POST",
+		Path:      "$base_url/login",
+		Headers:   jsonx.Map{"X-Api": "v1"},
+		Params:    jsonx.Map{"t": "1"},
+		Body:      jsonx.Any{Val: map[string]any{"u": "a"}},
+		BodyType:  model.BodyTypeJSON,
+	}
+	api.ID = 7
+
+	out, err := Render(&Input{
+		Project: newProject(), Env: newEnv(),
+		Cases: []CaseSpec{{Case: tc, Steps: steps}},
+		APIs:  map[uint64]*model.APIDef{7: api},
+	})
+	if err != nil {
+		t.Fatalf("接口引用渲染失败: %v", err)
+	}
+	y := out.Cases[0].YAML
+
+	// 请求内容全部来自接口定义
+	for _, want := range []string{
+		"url: $base_url/login",
+		"t: \"1\"",     // params（标量统一按字符串渲染，避免 YAML 数字歧义）
+		"X-Api: v1",    // 接口头
+		"method: POST", // 方法
+		"u: a",         // body
+	} {
+		if !strings.Contains(y, want) {
+			t.Fatalf("内联产物缺少 %q:\n%s", want, y)
+		}
+	}
+	// 引用关系是平台概念，不泄漏进 YAML
+	if strings.Contains(y, "ref_api_id") {
+		t.Fatalf("ref_api_id 不应出现在编译产物里:\n%s", y)
+	}
+	// 断言仍来自步骤（不属于接口）
+	if !strings.Contains(y, "status_code") {
+		t.Fatalf("步骤自身的断言丢失:\n%s", y)
+	}
+	// StepDecl 仍记录为 api 类型（引用关系在声明层可见）
+	if out.Cases[0].Steps[0].StepType != model.StepAPI {
+		t.Fatalf("StepDecl.StepType = %q", out.Cases[0].Steps[0].StepType)
+	}
+}
+
+func TestRender_接口引用异常(t *testing.T) {
+	// 未选接口
+	tc, steps := newCase()
+	steps[0].StepType = model.StepAPI
 	if _, err := Render(&Input{
 		Project: newProject(), Env: newEnv(),
 		Cases: []CaseSpec{{Case: tc, Steps: steps}},
 	}); err == nil {
-		t.Fatal("M1 尚未开放 api 步骤，应当显式拒绝而不是产出引擎未知的文件")
+		t.Fatal("缺少 ref_api_id 应报错")
+	}
+
+	// 悬空引用
+	steps[0].RefAPIID = 999
+	if _, err := Render(&Input{
+		Project: newProject(), Env: newEnv(),
+		APIs:  map[uint64]*model.APIDef{},
+		Cases: []CaseSpec{{Case: tc, Steps: steps}},
+	}); err == nil {
+		t.Fatal("引用不存在的接口应报错")
+	}
+
+	// 跨项目引用
+	api := &model.APIDef{ProjectID: 2, Code: "other", Method: "GET", Path: "/x"}
+	api.ID = 5
+	steps[0].RefAPIID = 5
+	if _, err := Render(&Input{
+		Project: newProject(), Env: newEnv(),
+		APIs:  map[uint64]*model.APIDef{5: api},
+		Cases: []CaseSpec{{Case: tc, Steps: steps}},
+	}); err == nil {
+		t.Fatal("跨项目引用应报错")
 	}
 }
 

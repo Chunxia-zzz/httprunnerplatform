@@ -18,6 +18,10 @@ export interface EditorStep {
   seq: number
   name: string
   enabled: boolean
+  /** 步骤类型：request 直接请求 / api 引用接口（F1） */
+  stepType: 'request' | 'api'
+  /** stepType=api 时引用的接口定义 ID；否则为 null */
+  refApiId: number | null
   method: string
   url: string
   headers: KVRow[]
@@ -47,6 +51,8 @@ export function newStep(): EditorStep {
     seq: 0,
     name: '',
     enabled: true,
+    stepType: 'request',
+    refApiId: null,
     method: 'GET',
     url: '/',
     headers: [],

@@ -16,9 +16,11 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 
 import {
   ApiError,
+  apiDefApi,
   caseApi,
   paramApi,
   runApi,
+  type APIDef,
   type CaseDetail,
   type CaseReq,
   type DebugStepResult,
@@ -180,6 +182,8 @@ function toEditorStep(s: CaseDetail['steps'][number]): EditorStep {
   step.seq = s.seq
   step.name = s.name
   step.enabled = s.enabled
+  step.stepType = s.step_type === 'api' ? 'api' : 'request'
+  step.refApiId = s.ref_api_id ? s.ref_api_id : null
   step.method = (req.method || 'GET').toUpperCase()
   step.url = req.url || ''
   step.headers = mapToRows(req.headers)
@@ -286,12 +290,17 @@ function toStepReq(s: EditorStep): StepReq {
       req.body_type = 'none'
   }
 
+  // 引用接口的步骤不带请求内容：请求来自接口定义，编译期内联展开。
+  // 这里把 request 置空而不是保留草稿，避免「改了接口却还在用旧请求」的歧义。
+  const isApi = s.stepType === 'api'
+
   return {
     seq: s.seq,
     name: s.name.trim(),
     enabled: s.enabled,
-    step_type: 'request',
-    request: req as StepReq['request'],
+    step_type: isApi ? 'api' : 'request',
+    ref_api_id: isApi && s.refApiId ? s.refApiId : 0,
+    request: isApi ? null : (req as StepReq['request']),
     variables: rowsToMap(s.variables),
     extract: s.extract.filter((e) => e.name.trim() !== '' || e.expression.trim() !== ''),
     validate: s.validate.filter((a) => a.check.trim() !== '' || a.assert.trim() !== ''),
@@ -544,6 +553,22 @@ async function loadModules() {
 }
 
 /** 加载当前项目的数据集，供「数据集」tab 勾选。 */
+/** 项目接口库（引用接口时选择用）。拿不到不影响编辑，只是没得选。 */
+const apiList = ref<APIDef[]>([])
+
+async function loadAPIs() {
+  if (!projects.currentId) {
+    apiList.value = []
+    return
+  }
+  try {
+    const page = await apiDefApi.listApis(projects.currentId)
+    apiList.value = page.items ?? []
+  } catch {
+    apiList.value = []
+  }
+}
+
 async function loadDatasets() {
   if (!projects.currentId) {
     datasets.value = []
@@ -618,7 +643,7 @@ const definedVarsByStep = computed(() => {
 
 onMounted(async () => {
   if (!projects.loaded) await projects.fetchList()
-  await Promise.all([load(), loadModules(), loadDatasets()])
+  await Promise.all([load(), loadModules(), loadDatasets(), loadAPIs()])
 })
 </script>
 
@@ -839,6 +864,7 @@ onMounted(async () => {
             :index="i"
             :total="steps.length"
             :defined-vars="definedVarsByStep[i]"
+            :apis="apiList"
             @remove="removeStep"
             @duplicate="duplicateStep"
             @move="moveStep"

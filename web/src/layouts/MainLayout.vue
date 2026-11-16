@@ -22,6 +22,7 @@ const projects = useProjectStore()
  * RequireAdmin，给他们显示一个点了必然 403 的菜单项没有意义。
  */
 const ALL_NAV = [
+  { name: 'apis', label: '接口库', icon: 'Connection', admin: false },
   { name: 'cases', label: '用例管理', icon: 'Document', admin: false },
   { name: 'datasets', label: '参数化数据集', icon: 'Grid', admin: false },
   { name: 'suites', label: '用例集', icon: 'Files', admin: false },
