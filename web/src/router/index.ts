@@ -43,6 +43,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调试台' },
       },
       {
+        // Mock 是接口库的下游能力（按接口定义自动生成），紧跟在后面
+        path: 'mock',
+        name: 'mock',
+        component: () => import('@/views/MockView.vue'),
+        meta: { title: 'Mock 服务' },
+      },
+      {
         // 接口库是「用例引用」的数据层，排在用例之前
         path: 'apis',
         name: 'apis',

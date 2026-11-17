@@ -53,6 +53,7 @@ type Set struct {
 	Export      *ExportService
 	Baseline    *BaselineService
 	API         *APIService
+	Mock        *MockService
 }
 
 // New 构造全部 service。
@@ -74,6 +75,7 @@ func New(d Deps) *Set {
 		Export:      NewExportService(d),
 		Baseline:    NewBaselineService(d),
 		API:         &APIService{Deps: d},
+		Mock:        &MockService{Deps: d, hits: map[uint64][]MockHit{}},
 	}
 }
 

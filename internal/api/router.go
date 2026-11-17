@@ -87,6 +87,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerBaselineRoutes(authed, deps)
 		registerUserRoutes(authed, deps)
 		registerTokenRoutes(authed, deps)
+		registerMockAdminRoutes(authed, deps)
 	}
 
 	// ⭐ CI 入口单独一个前缀：不走会话体系，语义与限流都和页面上的人不同，
@@ -95,7 +96,31 @@ func NewRouter(deps *Deps) *gin.Engine {
 	open.Use(middleware.RequireToken(deps.Services.Token.Verify))
 	registerOpenRoutes(open, deps)
 
+	// ⭐ Mock 端点（F4）也是公开的，但语义完全不同：它模拟的是「被测系统」，
+	// 调用方是别人的前端/服务，不是平台用户。因此独立前缀、不挂任何鉴权与
+	// JSON 兜底——返回的就是接口定义里写的响应。
+	mock := r.Group("/mock")
+	registerMockPublicRoutes(mock, deps)
+
 	return r
+}
+
+// registerMockPublicRoutes 注册公开的 Mock 端点（F4）。
+//
+// 两级注册：「/mock/:code」覆盖根路径，「/mock/:code/*rest」覆盖子路径。
+// gin 不允许 `:code` 与 `*rest` 组合成可选段，所以拆成两条。
+func registerMockPublicRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newMockHandler(deps)
+	g.Any("/:code", h.Serve)
+	g.Any("/:code/*rest", h.Serve)
+}
+
+// registerMockAdminRoutes 注册 Mock 管理端点（需登录）。
+func registerMockAdminRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newMockHandler(deps)
+	g.GET("/projects/:id/mock", h.Info)
+	g.PUT("/projects/:id/mock", h.SetEnabled)
+	g.GET("/projects/:id/mock/hits", h.Hits)
 }
 
 // registerUserRoutes 注册账号管理路由。

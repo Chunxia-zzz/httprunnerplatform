@@ -364,6 +364,14 @@ type Project struct {
 	WorkspacePath string `gorm:"size:512;not null;default:''" json:"workspace_path"`
 	HrpVersion    string `gorm:"size:32;not null;default:'v4.3.6'" json:"hrp_version"`
 	OwnerID       uint64 `gorm:"not null;default:0" json:"owner_id"`
+	// MockEnabled 是项目级 Mock 开关（F4）。
+	//
+	// ⚠️ 布尔列的 default 必须与 Go 零值（false）一致，否则有害：
+	// GORM 会把「带 default 标签且值为零值」的字段从 INSERT 里排除，
+	// 若 DB 默认值是 true，false 就会被静默写成 true（项目既有踩坑）。
+	// 这里写 `default:false` 是**必要**的：SQLite 不允许给已有表
+	// ADD 一个没有默认值的 NOT NULL 列（升级已部署的库时会直接失败）。
+	MockEnabled bool `gorm:"not null;default:false" json:"mock_enabled"`
 }
 
 // Environment 是环境，编译时渲染为工作区的 .env 文件。

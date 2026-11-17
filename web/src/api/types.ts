@@ -882,6 +882,34 @@ export interface DebugRequestReq {
   timeout_sec?: number
 }
 
+/** Mock 服务（F4）：可被 mock 的接口摘要。 */
+export interface MockAPI {
+  id: ID
+  code: string
+  name: string
+  module: string
+  method: string
+  path: string
+  has_body: boolean
+}
+
+/** Mock 页信息。 */
+export interface MockInfo {
+  enabled: boolean
+  base_path: string
+  apis: MockAPI[]
+  sample_curl: string
+}
+
+/** 一条命中记录（内存态，重启即失）。 */
+export interface MockHit {
+  at: string
+  method: string
+  path: string
+  api_code: string
+  status: number
+}
+
 /** 调试中单个步骤的结果（与执行详情 StepResult 同构，但字段是 parser 原始名）。 */
 export interface DebugStep {
   seq: number
