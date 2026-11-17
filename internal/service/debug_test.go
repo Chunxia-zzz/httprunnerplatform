@@ -183,3 +183,32 @@ func detailID(t *testing.T, d Deps, code string) uint64 {
 	}
 	return tc.ID
 }
+
+// TestDebugRequest_参数校验 调试台入口的硬校验：不依赖引擎，必须稳定失败。
+func TestDebugRequest_参数校验(t *testing.T) {
+	d := testDeps(t)
+	svc := &DebugService{Deps: d}
+	ctx := context.Background()
+
+	cases := []struct {
+		name string
+		req  DebugRequestReq
+	}{
+		{"缺 project_id", DebugRequestReq{Request: model.RequestSpec{URL: "/x"}}},
+		{"空 url", DebugRequestReq{ProjectID: 1, Request: model.RequestSpec{URL: "   "}}},
+		{"非法方法", DebugRequestReq{ProjectID: 1, Request: model.RequestSpec{Method: "FETCH", URL: "/x"}}},
+		{"非法 body_type", DebugRequestReq{ProjectID: 1, Request: model.RequestSpec{URL: "/x", BodyType: "xml"}}},
+	}
+	for _, c := range cases {
+		if _, err := svc.DebugRequest(ctx, c.req); err == nil {
+			t.Errorf("%s：应返回参数错误，实际返回 nil error", c.name)
+		}
+	}
+
+	// 项目不存在：也要在引擎之前失败（40002）。
+	if _, err := svc.DebugRequest(ctx, DebugRequestReq{
+		ProjectID: 99999, Request: model.RequestSpec{URL: "/x"},
+	}); err == nil {
+		t.Fatal("项目不存在应报错")
+	}
+}

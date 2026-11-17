@@ -14,6 +14,7 @@ import (
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/parser"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/hrpclient"
+	"github.com/Chunxia-zzz/httprunnerplatform/pkg/jsonx"
 )
 
 // DebugService 提供单步调试能力（M3）。
@@ -166,7 +167,23 @@ func (s *DebugService) DebugStep(ctx context.Context, req DebugStepRequest) (*De
 		return nil, err
 	}
 
-	// 编译临时最小用例。config.name 加后缀，避免与项目里其它用例的
+	return s.runSyntheticCase(ctx, project, env, tc, prefix, req.TimeoutSec, req.StepSeq)
+}
+
+// runSyntheticCase 执行一个「不落库的合成用例」并返回结构化结果。
+//
+// 单步调试（DebugStep）与调试台（DebugRequest）共用这条管线：
+// 构造临时用例 → 编译 → 独立临时工作区 → 跑一个子进程 → 解析 → 跑完即弃。
+// 抽出来是为了避免两套实现漂移——调试台和单步调试对同一个请求必须给出同样的结果。
+func (s *DebugService) runSyntheticCase(
+	ctx context.Context,
+	project *model.Project,
+	env *model.Environment,
+	tc *model.TestCase,
+	steps []model.TestStep,
+	timeoutSec int,
+	targetSeq int,
+) (*DebugStepResult, error) { // 编译临时最小用例。config.name 加后缀，避免与项目里其它用例的
 	// summary.json 标识串味（虽然工作区隔离，稳妥起见）。
 	debugCase := *tc
 	debugCase.Name = tc.Name + "【调试】"
@@ -181,7 +198,7 @@ func (s *DebugService) DebugStep(ctx context.Context, req DebugStepRequest) (*De
 	comp, err := compiler.Render(&compiler.Input{
 		Project:       project,
 		Env:           env,
-		Cases:         []compiler.CaseSpec{{Case: &debugCase, Steps: prefix}},
+		Cases:         []compiler.CaseSpec{{Case: &debugCase, Steps: steps}},
 		WorkspaceRoot: projectWorkspace(s.Cfg, project),
 		Datasets:      datasets,
 		APIs:          apis,
@@ -237,7 +254,7 @@ func (s *DebugService) DebugStep(ctx context.Context, req DebugStepRequest) (*De
 		return nil, errInternal("引擎不可用", err)
 	}
 
-	timeout := time.Duration(req.TimeoutSec) * time.Second
+	timeout := time.Duration(timeoutSec) * time.Second
 	if timeout <= 0 {
 		timeout = DefaultDebugTimeout
 	}
@@ -279,7 +296,7 @@ func (s *DebugService) DebugStep(ctx context.Context, req DebugStepRequest) (*De
 			Name:           so.Name,
 			StepType:       so.StepType,
 			Status:         so.Status,
-			IsTarget:       so.Seq == req.StepSeq,
+			IsTarget:       so.Seq == targetSeq,
 			ElapsedMs:      so.ElapsedMs,
 			ExtractResult:  so.ExtractResult,
 			FinalURL:       so.FinalURL,
@@ -298,9 +315,83 @@ func (s *DebugService) DebugStep(ctx context.Context, req DebugStepRequest) (*De
 		Panic:           res.Panic,
 		DurationMs:      outcome.DurationMs,
 		Steps:           debugSteps,
-		TargetSeq:       req.StepSeq,
-		ActualStepCount: len(prefix),
+		TargetSeq:       targetSeq,
+		ActualStepCount: len(steps),
 	}, nil
+}
+
+// DebugRequestReq 是调试台的 ad-hoc 请求（F3）。
+//
+// 与 DebugStepRequest 的区别：没有已保存的用例，请求内容直接来自页面。
+type DebugRequestReq struct {
+	ProjectID uint64 `json:"project_id"`
+	// EnvID 为 0 时回退到项目默认环境（与正式执行一致）。
+	EnvID uint64 `json:"env_id"`
+	// Request 就是页面填的请求；$base_url 与环境变量由编译器按现有规则渲染。
+	Request model.RequestSpec `json:"request"`
+	// TimeoutSec 是同步阻塞上限（秒）。0 表示用平台默认 30s。
+	TimeoutSec int `json:"timeout_sec"`
+}
+
+// DebugRequest 执行一次「不落库」的临时请求（F3 调试台）。
+//
+// 语义与 DebugStep 完全一致：不产生 run_record / case_result，临时工作区跑完即弃。
+// 实现上合成一个单步骤用例走同一条管线 —— hrp 的最小执行单位是「一个用例文件」
+// （实测 A2），没有"直接发一个请求"的引擎入口。
+func (s *DebugService) DebugRequest(ctx context.Context, req DebugRequestReq) (*DebugStepResult, error) {
+	if req.ProjectID == 0 {
+		return nil, errBadParam("project_id 不能为空")
+	}
+	project, err := loadProject(s.DB, req.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+
+	r := req.Request
+	r.URL = strings.TrimSpace(r.URL)
+	if r.URL == "" {
+		return nil, errBadParam("请求地址不能为空")
+	}
+	r.Method = strings.ToUpper(strings.TrimSpace(r.Method))
+	if r.Method == "" {
+		r.Method = "GET"
+	}
+	if !containsMethod(r.Method) {
+		return nil, errBadParam("请求方法 %q 不受支持", r.Method)
+	}
+	r.BodyType = strings.ToLower(strings.TrimSpace(r.BodyType))
+	switch r.BodyType {
+	case "":
+		r.BodyType = model.BodyTypeNone
+	case model.BodyTypeNone, model.BodyTypeJSON, model.BodyTypeForm, model.BodyTypeRaw:
+	default:
+		return nil, errBadParam("请求体类型只支持 json / form / raw / none，收到 %q", r.BodyType)
+	}
+
+	env, err := resolveEnv(s.DB, project.ID, req.EnvID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 合成用例：不落库，Code 用 adhoc 只为日志可读（不参与文件名冲突判断，
+	// 因为临时工作区是独立的）。
+	adhoc := &model.TestCase{
+		ProjectID: project.ID,
+		Code:      "adhoc",
+		Name:      "临时请求",
+		Priority:  model.PriorityP0,
+		Status:    model.CaseStatusActive,
+	}
+	step := model.TestStep{
+		Seq:      1,
+		StepType: model.StepRequest,
+		Name:     "临时请求",
+		Request:  jsonx.Any{Val: r},
+		Enabled:  true,
+		Extract:  jsonx.Slice[model.ExtractItem]{},
+		Validate: jsonx.Slice[model.AssertItem]{},
+	}
+	return s.runSyntheticCase(ctx, project, env, adhoc, []model.TestStep{step}, req.TimeoutSec, 1)
 }
 
 // enabledStepsForDebug 过滤出启用的步骤，并按 seq 升序排列。

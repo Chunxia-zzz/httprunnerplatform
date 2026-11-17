@@ -867,6 +867,21 @@ export interface DebugStepReq {
   timeout_sec?: number
 }
 
+/** 调试台（F3）：不落库的临时请求。 */
+export interface DebugRequestReq {
+  env_id?: ID
+  request: {
+    method?: string
+    url: string
+    headers?: EnvMap | null
+    params?: EnvMap | null
+    body?: unknown
+    body_type?: string
+  }
+  /** 同步阻塞上限（秒），0 = 平台默认 30s */
+  timeout_sec?: number
+}
+
 /** 调试中单个步骤的结果（与执行详情 StepResult 同构，但字段是 parser 原始名）。 */
 export interface DebugStep {
   seq: number

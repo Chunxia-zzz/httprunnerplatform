@@ -175,6 +175,8 @@ func registerCaseRoutes(g *gin.RouterGroup, deps *Deps) {
 func registerDebugRoutes(g *gin.RouterGroup, deps *Deps) {
 	h := newDebugHandler(deps)
 	g.POST("/cases/:id/debug", h.DebugStep)
+	// 调试台（F3）：不依赖已保存的用例，请求内容直接来自页面。
+	g.POST("/projects/:id/debug/request", h.DebugRequest)
 }
 
 // registerParamRoutes 注册参数化数据集路由（M3）。

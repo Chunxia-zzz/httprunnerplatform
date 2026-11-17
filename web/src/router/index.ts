@@ -36,6 +36,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '参数化数据集' },
       },
       {
+        // 调试台：不建用例也能发请求，位置放在接口库旁边（同一层「请求资产」）
+        path: 'console',
+        name: 'console',
+        component: () => import('@/views/DebugConsoleView.vue'),
+        meta: { title: '调试台' },
+      },
+      {
         // 接口库是「用例引用」的数据层，排在用例之前
         path: 'apis',
         name: 'apis',

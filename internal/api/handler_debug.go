@@ -34,3 +34,26 @@ func (h *debugHandler) DebugStep(c *gin.Context) {
 	}
 	OK(c, result)
 }
+
+// DebugRequest 执行一次不落库的临时请求（F3 调试台）。
+//
+// 与 DebugStep 的区别：请求内容来自页面而不是已保存的用例；
+// 相同点：都同步返回、都不进执行历史。
+func (h *debugHandler) DebugRequest(c *gin.Context) {
+	projectID, ok := ParseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req service.DebugRequestReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, response.CodeBadParam, "请求体非法："+err.Error())
+		return
+	}
+	req.ProjectID = projectID
+	result, err := h.svc.DebugRequest(c.Request.Context(), req)
+	if err != nil {
+		WriteError(c, err)
+		return
+	}
+	OK(c, result)
+}
