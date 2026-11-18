@@ -192,8 +192,13 @@ func Render(in *Input) (*Output, error) {
 func RenderEnv(env *model.Environment) string {
 	var b strings.Builder
 
-	baseURL := "http://127.0.0.1:8899"
-	if env != nil && strings.TrimSpace(env.BaseURL) != "" {
+	// ⭐ 无环境 / base_url 为空时**留空**，绝不兜底地址（BUG-007）。
+	// 旧实现兜底 http://127.0.0.1:8899（开发期的 echo 服务地址）：无环境的项目
+	// 会静默请求这个无关地址，在本机"恰好成功"，换台机器就打到别人的服务上
+	// —— 典型的假绿。留空时引擎报 variable base_url not found，平台归因为
+	// environment 并给出可读提示，这才是「未配置」应有的表现。
+	var baseURL string
+	if env != nil {
 		baseURL = strings.TrimSpace(env.BaseURL)
 	}
 	b.WriteString("base_url=" + envValue(baseURL) + "\n")
@@ -667,12 +672,115 @@ func applyBody(dst *yamlRequest, src model.RequestSpec) error {
 func normalizeCheckExpr(expr string) string {
 	e := strings.TrimSpace(expr)
 	if strings.HasPrefix(e, "body.json.") {
-		return "body." + strings.TrimPrefix(e, "body.json.")
+		e = "body." + strings.TrimPrefix(e, "body.json.")
+	} else if strings.HasPrefix(e, "json.") {
+		e = "body." + strings.TrimPrefix(e, "json.")
 	}
-	if strings.HasPrefix(e, "json.") {
-		return "body." + strings.TrimPrefix(e, "json.")
+	return quoteJmespath(e)
+}
+
+// quoteJmespath 给含非标识符字符的 jmespath 段加引号（实测 A29）。
+//
+// 引擎的**断言**走纯 jmespath 搜索：`body.headers.X-Env` 里的连字符让解析器
+// 直接报 SyntaxError 并 nil 指针 panic（提取路径引擎自己容忍，断言不会）。
+// 规则：按顶层 `.` 分段（引号内与 [] 内不切分），标识符段若不是
+// 字母/下划线开头、后随字母数字下划线，就包上双引号；用户已加引号的段
+// 原样保留；含 `$` 的表达式不处理（变量替换发生在 jmespath 之前）。
+func quoteJmespath(expr string) string {
+	if strings.Contains(expr, "$") {
+		return expr
 	}
-	return e
+	segs := splitJmespathTop(expr)
+	out := make([]string, len(segs))
+	changed := false
+	for i, seg := range segs {
+		out[i] = quoteJmespathSeg(seg)
+		if out[i] != seg {
+			changed = true
+		}
+	}
+	if !changed {
+		return expr
+	}
+	return strings.Join(out, ".")
+}
+
+// splitJmespathTop 按顶层 `.` 切分：引号内与 [] 内的点不切。
+func splitJmespathTop(expr string) []string {
+	var segs []string
+	var cur strings.Builder
+	depth := 0
+	inQuote := byte(0)
+	for i := 0; i < len(expr); i++ {
+		ch := expr[i]
+		if inQuote != 0 {
+			if ch == '\\' && i+1 < len(expr) {
+				cur.WriteByte(ch)
+				i++
+				cur.WriteByte(expr[i])
+				continue
+			}
+			if ch == inQuote {
+				inQuote = 0
+			}
+			cur.WriteByte(ch)
+			continue
+		}
+		switch ch {
+		case '"', '\'':
+			inQuote = ch
+			cur.WriteByte(ch)
+		case '[':
+			depth++
+			cur.WriteByte(ch)
+		case ']':
+			if depth > 0 {
+				depth--
+			}
+			cur.WriteByte(ch)
+		case '.':
+			if depth == 0 {
+				segs = append(segs, cur.String())
+				cur.Reset()
+				continue
+			}
+			cur.WriteByte(ch)
+		default:
+			cur.WriteByte(ch)
+		}
+	}
+	segs = append(segs, cur.String())
+	return segs
+}
+
+// quoteJmespathSeg 处理单个分段：标识符部分不合法就加引号，[..] 下标原样保留。
+func quoteJmespathSeg(seg string) string {
+	ident, rest := seg, ""
+	if i := strings.IndexByte(seg, '['); i >= 0 {
+		ident, rest = seg[:i], seg[i:]
+	}
+	if ident == "" || isPlainJmespathIdent(ident) {
+		return seg
+	}
+	if len(ident) >= 2 &&
+		((ident[0] == '"' && ident[len(ident)-1] == '"') || (ident[0] == '\'' && ident[len(ident)-1] == '\'')) {
+		return seg
+	}
+	return `"` + ident + `"` + rest
+}
+
+// isPlainJmespathIdent 判断是否为 jmespath 的合法裸标识符。
+func isPlainJmespathIdent(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'):
+		case c >= '0' && c <= '9' && i > 0:
+		default:
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 // renderExtractExpr 把提取项渲染成引擎的取值表达式。
@@ -700,12 +808,12 @@ func renderExtractExpr(it model.ExtractItem) string {
 		if e == "" {
 			return "body"
 		}
-		return "body." + e
+		return "body." + quoteJmespath(e)
 	default:
 		if expr == "" {
 			return obj
 		}
-		return obj + "." + strings.TrimPrefix(expr, ".")
+		return obj + "." + quoteJmespath(strings.TrimPrefix(expr, "."))
 	}
 }
 

@@ -123,8 +123,11 @@ func (s *RunService) Start(req StartRunRequest, triggerBy uint64) (*model.RunRec
 	case model.TargetSuite:
 		return s.StartSuite(req, triggerBy)
 	default:
+		// plan 不是一种"执行形态"：一次计划触发 = 对计划里的每个用例集
+		// 各起一条 suite 执行（前端「执行」按钮就是这么做的）。直接拒掉，
+		// 并告诉用户正确的入口，而不是留一句过时的「M2 后续提供」。
 		return nil, errBadParam(
-			"target_type 只支持 case / suite（plan 在 M2 后续提供），收到 %q", req.TargetType)
+			"target_type 只支持 case / suite，收到 %q。要执行计划请对计划里的每个用例集分别触发（计划页的「执行」按钮）", req.TargetType)
 	}
 	if req.ProjectID == 0 || req.TargetID == 0 {
 		return nil, errBadParam("project_id 与 target_id 不能为空")

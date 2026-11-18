@@ -508,12 +508,27 @@ func TestRenderExtractExpr(t *testing.T) {
 		{model.ExtractItem{Object: "status_code"}, "status_code"},
 		{model.ExtractItem{Object: "status_code", Expression: "ignored"}, "status_code"},
 		{model.ExtractItem{Object: "proto"}, "proto"},
-		{model.ExtractItem{Object: "headers", Expression: "X-A"}, "headers.X-A"},
+		// 实测 A29：含连字符的段统一加引号（提取路径引擎虽容忍，但统一形态更稳）
+		{model.ExtractItem{Object: "headers", Expression: "X-A"}, `headers."X-A"`},
 	}
 	for _, c := range cases {
 		if got := renderExtractExpr(c.it); got != c.want {
 			t.Errorf("renderExtractExpr(%#v) = %q, want %q", c.it, got, c.want)
 		}
+	}
+}
+
+func TestRenderEnv_无环境时base_url留空(t *testing.T) {
+	// BUG-007 回归：无环境 / base_url 为空时绝不兜底地址。
+	// 旧实现兜底 http://127.0.0.1:8899，无环境项目会静默请求无关地址。
+	if got := RenderEnv(nil); got != "base_url=\n" {
+		t.Fatalf("RenderEnv(nil) = %q, want 空 base_url", got)
+	}
+	if got := RenderEnv(&model.Environment{BaseURL: "  "}); got != "base_url=\n" {
+		t.Fatalf("RenderEnv(空base_url) = %q, want 空 base_url", got)
+	}
+	if got := RenderEnv(&model.Environment{BaseURL: "http://x"}); !strings.Contains(got, "base_url=http://x\n") {
+		t.Fatalf("RenderEnv(正常) = %q", got)
 	}
 }
 
