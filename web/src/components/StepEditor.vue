@@ -261,6 +261,43 @@ function formatJson() {
         </template>
       </el-tab-pane>
 
+      <el-tab-pane label="认证">
+        <div class="auth-row">
+          <el-select v-model="step.auth.type" style="width: 150px">
+            <el-option label="继承环境" value="inherit" />
+            <el-option label="无认证" value="none" />
+            <el-option label="Bearer Token" value="bearer" />
+            <el-option label="Basic 认证" value="basic" />
+            <el-option label="API Key" value="api_key" />
+          </el-select>
+
+          <template v-if="step.auth.type === 'bearer'">
+            <el-input v-model="step.auth.token" style="width: 300px" placeholder="值，可写 $token 引用上一步提取的变量" />
+          </template>
+          <template v-else-if="step.auth.type === 'basic'">
+            <el-input v-model="step.auth.username" style="width: 140px" placeholder="用户名" />
+            <el-input v-model="step.auth.password" style="width: 160px" placeholder="密码" show-password />
+          </template>
+          <template v-else-if="step.auth.type === 'api_key'">
+            <el-input v-model="step.auth.key_name" style="width: 150px" placeholder="键名，如 X-Api-Key" />
+            <el-input v-model="step.auth.key_value" style="width: 200px" placeholder="键值" />
+            <el-select v-model="step.auth.key_in" style="width: 110px">
+              <el-option label="请求头" value="header" />
+              <el-option label="查询参数" value="query" />
+            </el-select>
+          </template>
+        </div>
+        <div class="hrp-muted note">
+          「继承环境」用环境里配的认证；这里配置会覆盖环境。手写请求头的优先级高于认证。
+          <br />
+          <b>token 自动传递</b>：在第 1 步「提取」出 <code>token</code>，第 2 步选 Bearer 并填 <code>$token</code> 即可。
+          <br />
+          <b>动态变量</b>：URL / 请求头 / 参数 / 请求体里可写
+          <code v-pre>{{$timestamp}}</code>、<code v-pre>{{$timestampMs}}</code>、
+          <code v-pre>{{$uuid}}</code>，编译期替换，每次执行都不同。
+        </div>
+      </el-tab-pane>
+
       <el-tab-pane label="变量">
         <KeyValueEditor v-model="step.variables" key-placeholder="变量名" />
         <div class="hrp-muted note">步骤级变量，只在本步骤可见。编译为 teststep 的 variables。</div>
@@ -281,6 +318,13 @@ function formatJson() {
 </template>
 
 <style scoped>
+.auth-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
 .step__type {
   width: 110px;
   flex: none;

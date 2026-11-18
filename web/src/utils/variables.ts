@@ -121,5 +121,9 @@ export const BUILTIN_VARS = new Set<string>([
   'base_url',
   'ENV',
   'hrp',
+  // 平台动态变量（F7）：编译期被替换，引用它们不算未定义
+  'timestamp',
+  'timestampMs',
+  'uuid',
   // 参数化产生的变量名由数据集列名决定，运行时才注入，这里不做静态穷举
 ])

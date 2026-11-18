@@ -1,4 +1,4 @@
-import type { AssertItem, BodyType, ExtractItem } from '@/api'
+import type { AssertItem, AuthConfig, BodyType, ExtractItem } from '@/api'
 import type { KVRow } from '@/utils/format'
 
 /**
@@ -35,6 +35,8 @@ export interface EditorStep {
   bodyForm: KVRow[]
   /** 单请求超时（秒），0 表示不设置。写在 request 层才生效（实测 F13） */
   timeout: number
+  /** 步骤级认证（F7）：inherit 表示沿用环境 */
+  auth: AuthConfig
   /** 步骤级变量 */
   variables: KVRow[]
   extract: ExtractItem[]
@@ -52,6 +54,7 @@ export function newStep(): EditorStep {
     name: '',
     enabled: true,
     stepType: 'request',
+    auth: { type: 'inherit' },
     refApiId: null,
     method: 'GET',
     url: '/',

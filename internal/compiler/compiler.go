@@ -16,10 +16,15 @@
 package compiler
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/jsonx"
@@ -315,13 +320,16 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 	// 合并顺序即优先级，与前端「高级设置」里的层级一致。
 	merged := mergeStringMap(in.EnvGlobalHeaders(), caseHeaders)
 
+	// 认证（F7）位于优先级最底层：手写请求头 > 用例头 > 环境头 > 认证。
+	authHeaders, authParams := authInjection(resolveCompileAuth(in.Env, st))
+
 	switch st.StepType {
 	case model.StepRequest, "":
 		req, err := decodeRequest(st.Request)
 		if err != nil {
 			return ys, decl, err
 		}
-		if err := renderRequestInto(&ys, &decl, req, merged); err != nil {
+		if err := renderRequestInto(&ys, &decl, req, merged, authHeaders, authParams); err != nil {
 			return ys, decl, err
 		}
 
@@ -350,7 +358,7 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 			Body:     api.Body,
 			BodyType: api.BodyType,
 		}
-		if err := renderRequestInto(&ys, &decl, req, merged); err != nil {
+		if err := renderRequestInto(&ys, &decl, req, merged, authHeaders, authParams); err != nil {
 			return ys, decl, fmt.Errorf("接口 %s 的定义不完整: %w", api.Code, err)
 		}
 
@@ -387,7 +395,9 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 			}
 			list = append(list, yamlAssert{
 				Method: strings.TrimSpace(a.Assert),
-				Args:   flowSeq{a.Check, normalizeScalar(a.Expect)},
+				// 断言里的 body 路径同样归一（实测 A25）：`body.json.token`
+				// 在引擎里表示「响应体里有个叫 json 的键」，取不到就整条用例中止。
+				Args: flowSeq{normalizeCheckExpr(a.Check), normalizeScalar(a.Expect)},
 			})
 		}
 		ys.Validate = list
@@ -412,7 +422,8 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 // 直接请求与接口引用共用这一条路径：两者唯一的区别是请求声明来自步骤本身
 // 还是来自接口定义——渲染规则必须完全一致，否则「引用」与「直接写」
 // 会产出不同的 YAML，引用就不可信了。
-func renderRequestInto(ys *yamlTestStep, decl *StepDecl, req model.RequestSpec, merged map[string]any) error {
+func renderRequestInto(ys *yamlTestStep, decl *StepDecl, req model.RequestSpec,
+	merged map[string]any, authHeaders map[string]any, authParams jsonx.Map) error {
 	if strings.TrimSpace(req.URL) == "" {
 		return fmt.Errorf("请求缺少 url")
 	}
@@ -423,9 +434,12 @@ func renderRequestInto(ys *yamlTestStep, decl *StepDecl, req model.RequestSpec, 
 		Method: strings.ToUpper(defaultString(req.Method, "GET")),
 		URL:    req.URL,
 	}
+	// 认证头作为最低优先级层：先铺认证，再叠环境/用例头，最后叠步骤头
+	merged = mergeStringMap(authHeaders, merged)
 	yreq.Headers = mergeStringMap(merged, req.Headers)
-	if len(req.Params) > 0 {
-		yreq.Params = req.Params
+	params := mergeStringMap(map[string]any(authParams), req.Params)
+	if len(params) > 0 {
+		yreq.Params = params
 	}
 	if req.Timeout > 0 {
 		// request 层才生效（实测 F13）；teststep 层的 timeout 会被静默忽略（F14）
@@ -438,8 +452,133 @@ func renderRequestInto(ys *yamlTestStep, decl *StepDecl, req model.RequestSpec, 
 	if len(yreq.Headers) == 0 {
 		yreq.Headers = nil
 	}
+
+	// 动态变量（F7）：编译期展开，因此每次执行重新编译就会得到新值。
+	yreq.URL = expandDynamic(yreq.URL)
+	for k, v := range yreq.Headers {
+		if sv, ok := v.(string); ok {
+			yreq.Headers[k] = expandDynamic(sv)
+		}
+	}
+	for k, v := range yreq.Params {
+		yreq.Params[k] = expandDynamicAny(v)
+	}
+	if yreq.JSON != nil {
+		yreq.JSON.Val = expandDynamicAny(yreq.JSON.Val)
+	}
+	if yreq.Data != nil {
+		yreq.Data.Val = expandDynamicAny(yreq.Data.Val)
+	}
+
 	ys.Request = yreq
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// 认证（F7）
+// ---------------------------------------------------------------------------
+
+// resolveCompileAuth 决定这一步生效的认证：步骤优先，inherit/空沿用环境。
+func resolveCompileAuth(env *model.Environment, st model.TestStep) model.AuthConfig {
+	t := st.Auth.NormalizedType()
+	if t == model.AuthTypeInherit || st.Auth.Type == "" {
+		if env == nil {
+			return model.AuthConfig{Type: model.AuthTypeNone}
+		}
+		return env.Auth
+	}
+	if t == model.AuthTypeNone {
+		return model.AuthConfig{Type: model.AuthTypeNone}
+	}
+	return st.Auth
+}
+
+// authInjection 把认证配置转成要注入的请求头与查询参数。
+//
+// Bearer/API Key 的值允许写 `$var`：这里原样写入，由引擎在运行时替换
+// （「登录拿 token → 后续接口自动带」就是靠这个）。
+func authInjection(a model.AuthConfig) (map[string]any, jsonx.Map) {
+	switch a.NormalizedType() {
+	case model.AuthTypeBearer:
+		if strings.TrimSpace(a.Token) == "" {
+			return nil, nil
+		}
+		return map[string]any{"Authorization": "Bearer " + a.Token}, nil
+	case model.AuthTypeBasic:
+		if a.Username == "" && a.Password == "" {
+			return nil, nil
+		}
+		// 字面量编码：base64 在编译期完成，因此不支持变量插值（文档已说明）
+		token := base64.StdEncoding.EncodeToString([]byte(a.Username + ":" + a.Password))
+		return map[string]any{"Authorization": "Basic " + token}, nil
+	case model.AuthTypeAPIKey:
+		if strings.TrimSpace(a.KeyName) == "" || a.KeyValue == "" {
+			return nil, nil
+		}
+		if a.KeyIn == model.AuthInQuery {
+			return nil, jsonx.Map{a.KeyName: a.KeyValue}
+		}
+		return map[string]any{a.KeyName: a.KeyValue}, nil
+	}
+	return nil, nil
+}
+
+// ---------------------------------------------------------------------------
+// 动态变量（F7）
+// ---------------------------------------------------------------------------
+
+// dynamicVarRe 匹配 {{$timestamp}} / {{$timestampMs}} / {{$uuid}}。
+//
+// 只认这个精确形态：用户变量 `$timestamp` 不受影响，避免误伤。
+var dynamicVarRe = regexp.MustCompile(`\{\{\$(timestampMs|timestamp|uuid)\}\}`)
+
+// expandDynamic 展开动态变量（编译期一次性求值）。
+func expandDynamic(s string) string {
+	if !strings.Contains(s, "{{$") {
+		return s
+	}
+	return dynamicVarRe.ReplaceAllStringFunc(s, func(m string) string {
+		switch m {
+		case "{{$timestamp}}":
+			return strconv.FormatInt(time.Now().Unix(), 10)
+		case "{{$timestampMs}}":
+			return strconv.FormatInt(time.Now().UnixMilli(), 10)
+		case "{{$uuid}}":
+			return newUUIDv4()
+		}
+		return m
+	})
+}
+
+// expandDynamicAny 递归展开任意 JSON 结构里的动态变量（只动字符串）。
+func expandDynamicAny(v any) any {
+	switch t := v.(type) {
+	case string:
+		return expandDynamic(t)
+	case []any:
+		for i := range t {
+			t[i] = expandDynamicAny(t[i])
+		}
+		return t
+	case map[string]any:
+		for k, val := range t {
+			t[k] = expandDynamicAny(val)
+		}
+		return t
+	default:
+		return v
+	}
+}
+
+// newUUIDv4 生成随机 UUID（v4 格式）。
+func newUUIDv4() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "00000000-0000-4000-8000-000000000000"
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func applyBody(dst *yamlRequest, src model.RequestSpec) error {
@@ -486,6 +625,32 @@ func applyBody(dst *yamlRequest, src model.RequestSpec) error {
 //
 // 引擎的写法是 `<object>.<path>`，例如 `body.args.token`。
 // status_code / proto 这类标量对象没有子路径，直接用对象名。
+// normalizeCheckExpr 归一断言里的检查表达式。
+//
+// 与提取共用同一条引擎事实（A25）：body 的取值路径是 `body.<path>`。
+// 历史数据/前端提示里的 `body.json.x`、`json.x` 都吸收了，避免「断言一加
+// 整条用例就中止」这种最难查的失败。
+func normalizeCheckExpr(expr string) string {
+	e := strings.TrimSpace(expr)
+	if strings.HasPrefix(e, "body.json.") {
+		return "body." + strings.TrimPrefix(e, "body.json.")
+	}
+	if strings.HasPrefix(e, "json.") {
+		return "body." + strings.TrimPrefix(e, "json.")
+	}
+	return e
+}
+
+// renderExtractExpr 把提取项渲染成引擎的取值表达式。
+//
+// ⚠️ 实测 A25（hrp v4.3.6）：body 的取值路径是 **`body.<路径>`**，
+// 写成 `body.json.token` 会**恒得 null 且不报错**。平台此前把用户填写的
+// `json.token` 直接拼在 `body.` 后面，产出的全是取不到值的死表达式。
+// 这里统一吸收历史写法（`body.` / `json.` 前缀），让同一份数据在两种写法下
+// 都编译成引擎真正认识的形态。
+//
+// headers / cookies 的写法是 `headers.<名>`（引擎会自动加引号），
+// 匹配**大小写敏感**，与 HTTP 头本身的不区分大小写不同（同一实测）。
 func renderExtractExpr(it model.ExtractItem) string {
 	obj := strings.TrimSpace(it.Object)
 	expr := strings.TrimSpace(it.Expression)
@@ -494,6 +659,14 @@ func renderExtractExpr(it model.ExtractItem) string {
 		return obj
 	case "":
 		return expr
+	case model.ExtractBody:
+		e := strings.TrimLeft(expr, ".")
+		e = strings.TrimPrefix(e, "body.")
+		e = strings.TrimPrefix(e, "json.")
+		if e == "" {
+			return "body"
+		}
+		return "body." + e
 	default:
 		if expr == "" {
 			return obj

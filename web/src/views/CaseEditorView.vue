@@ -184,6 +184,7 @@ function toEditorStep(s: CaseDetail['steps'][number]): EditorStep {
   step.enabled = s.enabled
   step.stepType = s.step_type === 'api' ? 'api' : 'request'
   step.refApiId = s.ref_api_id ? s.ref_api_id : null
+  step.auth = (s.auth as typeof step.auth) ?? { type: 'inherit' }
   step.method = (req.method || 'GET').toUpperCase()
   step.url = req.url || ''
   step.headers = mapToRows(req.headers)
@@ -300,6 +301,7 @@ function toStepReq(s: EditorStep): StepReq {
     enabled: s.enabled,
     step_type: isApi ? 'api' : 'request',
     ref_api_id: isApi && s.refApiId ? s.refApiId : 0,
+    auth: s.auth,
     request: isApi ? null : (req as StepReq['request']),
     variables: rowsToMap(s.variables),
     extract: s.extract.filter((e) => e.name.trim() !== '' || e.expression.trim() !== ''),

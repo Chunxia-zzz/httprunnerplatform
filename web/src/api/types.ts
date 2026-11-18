@@ -149,6 +149,17 @@ export interface ProjectReq {
 /** 环境的变量表。值一律被后端转成字符串写入 .env。 */
 export type EnvMap = Record<string, unknown>
 
+/** 认证配置（F7）：环境级或步骤级。 */
+export interface AuthConfig {
+  type: 'inherit' | 'none' | 'bearer' | 'basic' | 'api_key' | string
+  token?: string
+  username?: string
+  password?: string
+  key_name?: string
+  key_value?: string
+  key_in?: 'header' | 'query' | string
+}
+
 export interface Environment {
   id: ID
   project_id: ID
@@ -158,6 +169,7 @@ export interface Environment {
   global_headers: EnvMap | null
   verify_ssl: boolean
   is_default: boolean
+  auth?: AuthConfig | null
   created_at: string
   updated_at: string
 }
@@ -169,6 +181,7 @@ export interface EnvironmentReq {
   global_headers: EnvMap | null
   verify_ssl: boolean
   is_default: boolean
+  auth?: AuthConfig | null
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +304,8 @@ export interface TestStep {
   ref_api_id: ID
   ref_case_id: ID
   request: RequestSpec | null
+  /** 步骤级认证覆盖（F7）：type=inherit 时沿用环境 */
+  auth?: AuthConfig | null
   variables: EnvMap | null
   extract: ExtractItem[]
   validate: AssertItem[]
@@ -310,6 +325,7 @@ export interface StepReq {
   ref_api_id?: ID
   ref_case_id?: ID
   request?: RequestSpec | null
+  auth?: AuthConfig | null
   variables?: EnvMap | null
   extract?: ExtractItem[]
   validate?: AssertItem[]

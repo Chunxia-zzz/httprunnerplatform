@@ -484,9 +484,13 @@ func TestRender_extract表达式(t *testing.T) {
 	tc, steps := newCase()
 	yml := renderOne(t, tc, steps).Cases[0].YAML
 
-	// v4 的写法是 `<object>.<path>`
-	if !strings.Contains(yml, "token: body.json.token") {
+	// 实测 A25：引擎的 body 取值是 `body.<path>`；`body.json.<path>` 恒为 null。
+	// 用户写 `json.token` 时由编译期吸收前缀。
+	if !strings.Contains(yml, "token: body.token") {
 		t.Fatalf("body 提取表达式渲染错误:\n%s", yml)
+	}
+	if strings.Contains(yml, "body.json.") {
+		t.Fatalf("不应产出取不到值的 body.json.* 表达式:\n%s", yml)
 	}
 	// status_code / proto 是标量对象，没有子路径
 	if !strings.Contains(yml, "code: status_code") {

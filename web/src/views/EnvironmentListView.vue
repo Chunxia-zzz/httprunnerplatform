@@ -13,7 +13,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessageBox, type FormInstance } from 'element-plus'
 
-import { environmentApi, MASKED_VALUE, type Environment, type EnvMap, type EnvironmentReq } from '@/api'
+import { type AuthConfig, environmentApi, MASKED_VALUE, type Environment, type EnvMap, type EnvironmentReq } from '@/api'
 import KeyValueEditor from '@/components/KeyValueEditor.vue'
 import { useProjectStore } from '@/stores/project'
 import { mapToRows, rowsToMap, type KVRow } from '@/utils/format'
@@ -36,6 +36,7 @@ const form = ref<{
   is_default: boolean
   environs: KVRow[]
   global_headers: KVRow[]
+  auth: AuthConfig
 }>({
   name: '',
   base_url: '',
@@ -43,6 +44,7 @@ const form = ref<{
   is_default: false,
   environs: [],
   global_headers: [],
+  auth: { type: 'none' },
 })
 
 const isEdit = computed(() => editingId.value > 0)
@@ -78,6 +80,7 @@ function reset() {
     is_default: list.value.length === 0,
     environs: [],
     global_headers: [],
+    auth: { type: 'none' } as AuthConfig,
   }
 }
 
@@ -104,6 +107,7 @@ function openEdit(row: unknown) {
     is_default: e.is_default,
     environs: mapToRows(e.environs),
     global_headers: mapToRows(e.global_headers),
+    auth: (e.auth as AuthConfig) ?? { type: 'none' },
   }
   dialogVisible.value = true
 }
@@ -116,6 +120,7 @@ function toPayload(): EnvironmentReq {
     global_headers: rowsToMap(form.value.global_headers) as EnvMap | null,
     verify_ssl: form.value.verify_ssl,
     is_default: form.value.is_default,
+    auth: form.value.auth,
   }
 }
 
@@ -257,6 +262,44 @@ watch(projectId, () => {
           <KeyValueEditor v-model="form.global_headers" key-placeholder="Header 名，如 X-From" />
         </el-form-item>
 
+        <el-form-item label="认证">
+          <div class="auth-box">
+            <el-select v-model="form.auth.type" style="width: 160px">
+              <el-option label="无认证" value="none" />
+              <el-option label="Bearer Token" value="bearer" />
+              <el-option label="Basic 认证" value="basic" />
+              <el-option label="API Key" value="api_key" />
+            </el-select>
+
+            <template v-if="form.auth.type === 'bearer'">
+              <el-input
+                v-model="form.auth.token"
+                class="auth-box__input"
+                placeholder="token 值，可写 $token 引用运行时变量"
+              />
+            </template>
+
+            <template v-else-if="form.auth.type === 'basic'">
+              <el-input v-model="form.auth.username" class="auth-box__input" placeholder="用户名" />
+              <el-input v-model="form.auth.password" class="auth-box__input" placeholder="密码" show-password />
+            </template>
+
+            <template v-else-if="form.auth.type === 'api_key'">
+              <el-input v-model="form.auth.key_name" style="width: 160px" placeholder="键名，如 X-Api-Key" />
+              <el-input v-model="form.auth.key_value" class="auth-box__input" placeholder="键值" />
+              <el-select v-model="form.auth.key_in" style="width: 120px">
+                <el-option label="请求头" value="header" />
+                <el-option label="查询参数" value="query" />
+              </el-select>
+            </template>
+
+            <div class="hrp-muted auth-box__hint">
+              编译时自动注入到该环境下的所有请求；步骤里手写的请求头优先级更高。
+              Basic 的账号密码按字面量编码，不支持变量。
+            </div>
+          </div>
+        </el-form-item>
+
         <el-form-item label="选项">
           <div class="options">
             <el-switch v-model="form.verify_ssl" active-text="校验 SSL 证书" />
@@ -286,6 +329,17 @@ watch(projectId, () => {
 </template>
 
 <style scoped>
+.auth-box {
+  width: 100%;
+}
+.auth-box__input {
+  margin-left: 8px;
+  width: 260px;
+}
+.auth-box__hint {
+  font-size: 12px;
+  margin-top: 6px;
+}
 .tip {
   font-size: 12px;
   line-height: 1.6;

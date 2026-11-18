@@ -409,7 +409,7 @@ func validateExtractAndAssert(r *Result, st model.TestStep, scope *varScope, ext
 		field := fmt.Sprintf("validate[%d]", i)
 		if strings.TrimSpace(a.Check) == "" {
 			r.errf(ScopeStep, st.Seq, field, CodeInvalidAssertExpr,
-				"检查表达式是被测对象的取值路径，如 status_code、body.json.token",
+				"检查表达式是被测对象的取值路径，如 status_code、body.token（写 json.token 也会被编译期归一）",
 				"步骤「%s」的第 %d 条断言缺少检查表达式", st.Name, i+1)
 		}
 		if !containsString(parserAssertMethods(), a.Assert) {
@@ -507,6 +507,11 @@ func newVarScope(env *model.Environment, tc *model.TestCase) *varScope {
 
 	// 引擎把 .env 里的 base_url 注入为变量，这是每个用例都能用的
 	s.define("base_url")
+	// 平台动态变量（F7）：编译期被替换成具体值，引用它们不算未定义。
+	// 注意只在 {{$name}} 形态下替换，裸写 $timestamp 仍按普通变量处理。
+	for _, n := range []string{"timestamp", "timestampMs", "uuid"} {
+		s.define(n)
+	}
 	if env != nil {
 		for k := range env.Environs {
 			s.define(k)

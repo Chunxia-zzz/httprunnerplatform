@@ -192,6 +192,7 @@ type StepReq struct {
 	RefAPIID  uint64                         `json:"ref_api_id"`
 	RefCaseID uint64                         `json:"ref_case_id"`
 	Request   jsonx.Any                      `json:"request"`
+	Auth      model.AuthConfig               `json:"auth"`
 	Variables jsonx.Map                      `json:"variables"`
 	Extract   jsonx.Slice[model.ExtractItem] `json:"extract"`
 	Validate  jsonx.Slice[model.AssertItem]  `json:"validate"`
@@ -601,6 +602,35 @@ func (s *CaseService) buildCase(projectID uint64, req CaseReq, selfID uint64) (*
 	}, nil
 }
 
+// normalizeStepAuth 归一步骤认证：空值 = 继承环境。
+//
+// 与环境的 sanitizeAuth 共用「切换类型清空无关字段」的规则，
+// 但默认值不同：环境缺省是 none，步骤缺省是 inherit（沿用环境）。
+func normalizeStepAuth(a model.AuthConfig) model.AuthConfig {
+	if a.Type == "" {
+		a.Type = model.AuthTypeInherit
+	}
+	switch a.Type {
+	case model.AuthTypeInherit:
+		return model.AuthConfig{Type: model.AuthTypeInherit}
+	case model.AuthTypeNone:
+		return model.AuthConfig{Type: model.AuthTypeNone}
+	case model.AuthTypeBearer:
+		return model.AuthConfig{Type: a.Type, Token: a.Token}
+	case model.AuthTypeBasic:
+		return model.AuthConfig{Type: a.Type, Username: a.Username, Password: a.Password}
+	case model.AuthTypeAPIKey:
+		in := a.KeyIn
+		if in != model.AuthInQuery {
+			in = model.AuthInHeader
+		}
+		return model.AuthConfig{Type: a.Type, KeyName: a.KeyName, KeyValue: a.KeyValue, KeyIn: in}
+	default:
+		// 未知类型按继承处理：保存侧不报错，交给校验器/编译器给结论
+		return model.AuthConfig{Type: model.AuthTypeInherit}
+	}
+}
+
 // validateAPIRefs 校验接口引用步骤的 ref_api_id：存在且属于本项目。
 //
 // 只校验「结构性」问题（引用指向哪里），不校验接口内容是否合理——
@@ -684,6 +714,7 @@ func toTestStep(req StepReq, seq int) model.TestStep {
 		RefAPIID:  req.RefAPIID,
 		RefCaseID: req.RefCaseID,
 		Request:   req.Request,
+		Auth:      normalizeStepAuth(req.Auth),
 		Variables: req.Variables,
 		Extract:   req.Extract,
 		Validate:  req.Validate,

@@ -30,12 +30,13 @@ var secretKeyRe = regexp.MustCompile(`(?i)(token|secret|password|key|auth)`)
 
 // EnvReq 是创建/更新环境的请求（PUT 为全量覆盖）。
 type EnvReq struct {
-	Name          string    `json:"name"`
-	BaseURL       string    `json:"base_url"`
-	Environs      jsonx.Map `json:"environs"`
-	GlobalHeaders jsonx.Map `json:"global_headers"`
-	VerifySSL     bool      `json:"verify_ssl"`
-	IsDefault     bool      `json:"is_default"`
+	Name          string           `json:"name"`
+	BaseURL       string           `json:"base_url"`
+	Environs      jsonx.Map        `json:"environs"`
+	GlobalHeaders jsonx.Map        `json:"global_headers"`
+	VerifySSL     bool             `json:"verify_ssl"`
+	IsDefault     bool             `json:"is_default"`
+	Auth          model.AuthConfig `json:"auth"`
 }
 
 // List 返回项目下的环境列表。
@@ -98,6 +99,7 @@ func (s *EnvironmentService) Create(projectID uint64, req EnvReq) (*model.Enviro
 		BaseURL:       strings.TrimSpace(req.BaseURL),
 		Environs:      sanitizeEnvMap(req.Environs, nil),
 		GlobalHeaders: sanitizeEnvMap(req.GlobalHeaders, nil),
+		Auth:          sanitizeAuth(req.Auth, nil),
 		VerifySSL:     req.VerifySSL,
 		IsDefault:     req.IsDefault,
 	}
@@ -161,6 +163,7 @@ func (s *EnvironmentService) Update(id uint64, req EnvReq) (*model.Environment, 
 	// 绝不把占位符本身存进去。
 	e.Environs = sanitizeEnvMap(req.Environs, e.Environs)
 	e.GlobalHeaders = sanitizeEnvMap(req.GlobalHeaders, e.GlobalHeaders)
+	e.Auth = sanitizeAuth(req.Auth, &e.Auth)
 	e.VerifySSL = req.VerifySSL
 	e.IsDefault = req.IsDefault
 
@@ -231,7 +234,64 @@ func maskedEnv(e *model.Environment, isAdmin bool) *model.Environment {
 	cp := *e
 	cp.Environs = maskMap(e.Environs)
 	cp.GlobalHeaders = maskMap(e.GlobalHeaders)
+	// 认证里的敏感字段同样掩码：环境列表对普通成员是可见的
+	cp.Auth = maskAuth(e.Auth)
 	return &cp
+}
+
+// sanitizeAuth 归一认证配置，并处理掩码占位符。
+//
+// 与键值对同一套语义：回传 ****** 表示「保持原值」，否则把占位符存进去
+// 会让下一次执行真的带上 "******"。
+func sanitizeAuth(next model.AuthConfig, prev *model.AuthConfig) model.AuthConfig {
+	if next.Type == "" {
+		next.Type = model.AuthTypeNone
+	}
+	if prev != nil {
+		if next.Token == MaskedValue {
+			next.Token = prev.Token
+		}
+		if next.Password == MaskedValue {
+			next.Password = prev.Password
+		}
+		if next.KeyValue == MaskedValue {
+			next.KeyValue = prev.KeyValue
+		}
+	}
+	// 切到别的类型时清掉无关字段：避免「改成 Bearer 后密码还躺在库里」
+	switch next.Type {
+	case model.AuthTypeNone, model.AuthTypeInherit:
+		return model.AuthConfig{Type: next.Type}
+	case model.AuthTypeBearer:
+		return model.AuthConfig{Type: next.Type, Token: next.Token}
+	case model.AuthTypeBasic:
+		return model.AuthConfig{Type: next.Type, Username: next.Username, Password: next.Password}
+	case model.AuthTypeAPIKey:
+		in := next.KeyIn
+		if in != model.AuthInQuery {
+			in = model.AuthInHeader
+		}
+		return model.AuthConfig{Type: next.Type, KeyName: next.KeyName, KeyValue: next.KeyValue, KeyIn: in}
+	}
+	return next
+}
+
+func maskAuth(a model.AuthConfig) model.AuthConfig {
+	switch a.NormalizedType() {
+	case model.AuthTypeBearer:
+		if a.Token != "" {
+			a.Token = MaskedValue
+		}
+	case model.AuthTypeBasic:
+		if a.Password != "" {
+			a.Password = MaskedValue
+		}
+	case model.AuthTypeAPIKey:
+		if a.KeyValue != "" {
+			a.KeyValue = MaskedValue
+		}
+	}
+	return a
 }
 
 func maskMap(m jsonx.Map) jsonx.Map {

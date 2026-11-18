@@ -382,8 +382,11 @@ type Environment struct {
 	BaseURL       string    `gorm:"size:512;not null;default:''" json:"base_url"`
 	Environs      jsonx.Map `gorm:"type:text" json:"environs"`
 	GlobalHeaders jsonx.Map `gorm:"type:text" json:"global_headers"`
-	VerifySSL     bool      `gorm:"not null" json:"verify_ssl"`
-	IsDefault     bool      `gorm:"not null" json:"is_default"`
+	// Auth 是环境级认证（F7）：编译时注入到该环境下的所有请求。
+	// default:'' 让老库能增量加列（SQLite 不允许无默认值的 NOT NULL 列）。
+	Auth      AuthConfig `gorm:"type:text;not null;default:''" json:"auth"`
+	VerifySSL bool       `gorm:"not null" json:"verify_ssl"`
+	IsDefault bool       `gorm:"not null" json:"is_default"`
 }
 
 // APIDef 是接口定义库中的接口（M2 启用，M1 建表）。
@@ -478,8 +481,10 @@ type TestStep struct {
 	Validate  jsonx.Slice[AssertItem]  `gorm:"type:text" json:"validate"`
 	Hooks     jsonx.Any                `gorm:"type:text" json:"hooks"`
 	Enabled   bool                     `gorm:"not null" json:"enabled"`
-	WsOpType  string                   `gorm:"size:16;not null;default:''" json:"ws_op_type"`
-	WsPayload jsonx.Any                `gorm:"type:text" json:"ws_payload"`
+	// Auth 是步骤级认证覆盖（F7）：type=inherit 时沿用环境配置。
+	Auth      AuthConfig `gorm:"type:text;not null;default:''" json:"auth"`
+	WsOpType  string     `gorm:"size:16;not null;default:''" json:"ws_op_type"`
+	WsPayload jsonx.Any  `gorm:"type:text" json:"ws_payload"`
 }
 
 // ParamDataset 是参数化数据集（M3 启用）。
