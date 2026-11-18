@@ -117,6 +117,25 @@ const bodyTypeHint = computed(() => {
   }
 })
 
+const gqlVarsError = computed(() => {
+  if (props.step.stepType !== 'graphql' || !props.step.gqlVariables.trim()) return ''
+  try {
+    JSON.parse(props.step.gqlVariables)
+    return ''
+  } catch (e) {
+    return e instanceof Error ? e.message : '格式错误'
+  }
+})
+
+function formatGqlVars() {
+  if (!props.step.gqlVariables.trim()) return
+  try {
+    props.step.gqlVariables = JSON.stringify(JSON.parse(props.step.gqlVariables), null, 2)
+  } catch {
+    // 非法 JSON 时保持原样，错误信息已在模板里展示
+  }
+}
+
 function formatJson() {
   const t = props.step.bodyJson.trim()
   if (!t) return
@@ -137,6 +156,8 @@ function formatJson() {
         <el-select v-model="step.stepType" class="step__type" @change="onTypeChange">
           <el-option label="直接请求" value="request" />
           <el-option label="引用接口" value="api" />
+          <el-option label="WebSocket" value="websocket" />
+          <el-option label="GraphQL" value="graphql" />
         </el-select>
         <el-switch v-model="step.enabled" active-text="启用" inline-prompt />
         <span v-if="!step.enabled" class="hrp-muted step__off-hint">
@@ -191,8 +212,8 @@ function formatJson() {
       </el-alert>
     </template>
 
-    <div v-else class="row">
-      <el-select v-model="step.method" class="row__method">
+    <div v-else-if="step.stepType === 'request' || step.stepType === 'graphql'" class="row">
+      <el-select v-if="step.stepType === 'request'" v-model="step.method" class="row__method">
         <el-option v-for="m in HTTP_METHODS" :key="m" :label="m" :value="m" />
       </el-select>
       <el-input v-model="step.url" placeholder="相对路径（如 /get）或完整 URL" class="row__url hrp-mono" />
@@ -200,7 +221,34 @@ function formatJson() {
       <span class="hrp-muted row__hint">请求超时（秒，0 表示不设置）</span>
     </div>
 
-    <el-alert v-if="slashWarning" type="warning" show-icon :closable="false" class="step__alert">
+    <template v-else-if="step.stepType === 'websocket'">
+      <div class="row">
+        <el-select v-model="step.wsOpType" class="row__method">
+          <el-option label="open 建连接" value="open" />
+          <el-option label="wr 发+收" value="wr" />
+          <el-option label="w 只发" value="w" />
+          <el-option label="r 只收" value="r" />
+          <el-option label="ping 心跳" value="ping" />
+          <el-option label="close 关连接" value="close" />
+        </el-select>
+        <el-input v-model="step.wsUrl" placeholder="ws://127.0.0.1:8900/ws" class="row__url hrp-mono" />
+      </div>
+      <el-input
+        v-if="step.wsOpType === 'w' || step.wsOpType === 'wr'"
+        v-model="step.wsPayload"
+        type="textarea"
+        :rows="4"
+        class="hrp-mono ws-payload"
+        placeholder="要发送的文本内容（引擎的 text 帧）"
+      />
+      <div class="hrp-muted note">
+        WS 是**动作式**步骤：要先 open 再 wr/w/r，最后 close。每个动作都必须填同一个地址
+        （引擎按 URL 查找连接，实测 A26）。引擎还会把地址末尾补成 <code>/</code>。
+        断言与提取用 <code>body</code>（收到的消息）。
+      </div>
+    </template>
+
+    <el-alert v-if="slashWarning && step.stepType === 'request'" type="warning" show-icon :closable="false" class="step__alert">
       <template #title>引擎会补结尾斜杠</template>
       URL 不带查询串时，引擎会在发出前补一个 <code>/</code>：`$base_url/get` 实际请求的是
       <code>GET /get/</code>。这个行为无法用改写 YAML 绕开（实测 A1），修法是让 URL 带上真实查询串
@@ -225,20 +273,52 @@ function formatJson() {
       </template>
     </el-alert>
 
+    <template v-if="step.stepType === 'graphql'">
+      <div class="gql-block">
+        <el-input
+          v-model="step.gqlQuery"
+          type="textarea"
+          :rows="7"
+          class="hrp-mono"
+          placeholder="query Q($id: ID!) { user(id: $id) { name } }"
+        />
+        <div class="gql-row">
+          <el-input v-model="step.gqlOperation" placeholder="operationName（可选）" style="width: 240px" />
+          <el-button size="small" @click="formatGqlVars">格式化 variables</el-button>
+          <span v-if="gqlVarsError" class="body-error">JSON 非法：{{ gqlVarsError }}</span>
+        </div>
+        <el-input
+          v-model="step.gqlVariables"
+          type="textarea"
+          :rows="3"
+          class="hrp-mono"
+          placeholder='variables，如 {"id": 1}'
+        />
+        <div class="hrp-muted note">
+          GraphQL 在协议层就是「POST + JSON {query, variables, operationName}」，
+          因此编译产物是普通 HTTP 请求：断言、提取、认证、重试全部照常可用（实测 A27）。
+        </div>
+      </div>
+    </template>
+
     <el-tabs class="step__tabs">
-      <el-tab-pane v-if="step.stepType !== 'api'" label="请求头">
+      <el-tab-pane v-if="step.stepType === 'websocket'" label="请求头">
+        <KeyValueEditor v-model="step.wsHeaders" key-placeholder="Header 名" />
+        <div class="hrp-muted note">握手时带上；后续动作不重复发送头。</div>
+      </el-tab-pane>
+      <el-tab-pane v-if="step.stepType === 'request' || step.stepType === 'graphql'" label="请求头">
         <KeyValueEditor v-model="step.headers" key-placeholder="Header 名" />
         <div class="hrp-muted note">
           请求头按「环境全局头 → 用例头 → 步骤头」合并，后者覆盖前者（大小写不敏感去重）。这里只需写本步骤特有的。
         </div>
       </el-tab-pane>
 
-      <el-tab-pane v-if="step.stepType !== 'api'" label="查询参数">
+      <el-tab-pane v-if="step.stepType === 'request'" label="查询参数">
         <KeyValueEditor v-model="step.params" key-placeholder="参数名" />
         <div class="hrp-muted note">参数为空时，引擎会给 URL 补结尾斜杠（见上方提示）。</div>
       </el-tab-pane>
 
-      <el-tab-pane v-if="step.stepType !== 'api'" label="请求体">
+      <el-tab-pane v-if="step.stepType === 'request'" label="请求体">
         <el-radio-group v-model="step.bodyType" class="body-type">
           <el-radio-button v-for="t in BODY_TYPES" :key="t" :value="t">{{ t }}</el-radio-button>
         </el-radio-group>

@@ -18,8 +18,8 @@ export interface EditorStep {
   seq: number
   name: string
   enabled: boolean
-  /** 步骤类型：request 直接请求 / api 引用接口（F1） */
-  stepType: 'request' | 'api'
+  /** 步骤类型：request 直接请求 / api 引用接口 / websocket / graphql（F10） */
+  stepType: 'request' | 'api' | 'websocket' | 'graphql'
   /** stepType=api 时引用的接口定义 ID；否则为 null */
   refApiId: number | null
   method: string
@@ -37,6 +37,15 @@ export interface EditorStep {
   timeout: number
   /** 步骤级认证（F7）：inherit 表示沿用环境 */
   auth: AuthConfig
+  /** WebSocket（F10）：动作式，每个动作都要带 url */
+  wsOpType: 'open' | 'ping' | 'wr' | 'w' | 'r' | 'close'
+  wsUrl: string
+  wsHeaders: KVRow[]
+  wsPayload: string
+  /** GraphQL（F10） */
+  gqlQuery: string
+  gqlVariables: string
+  gqlOperation: string
   /** 步骤级变量 */
   variables: KVRow[]
   extract: ExtractItem[]
@@ -55,6 +64,13 @@ export function newStep(): EditorStep {
     enabled: true,
     stepType: 'request',
     auth: { type: 'inherit' },
+    wsOpType: 'wr',
+    wsUrl: '',
+    wsHeaders: [],
+    wsPayload: '',
+    gqlQuery: '',
+    gqlVariables: '',
+    gqlOperation: '',
     refApiId: null,
     method: 'GET',
     url: '/',

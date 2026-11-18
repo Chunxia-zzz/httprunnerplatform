@@ -336,7 +336,12 @@ export interface TestStep {
   hooks: unknown | null
   enabled: boolean
   ws_op_type: string
+  ws_url: string
+  ws_headers: EnvMap | null
   ws_payload: unknown | null
+  graphql_query: string
+  graphql_variables: unknown | null
+  graphql_operation: string
   created_at: string
   updated_at: string
 }
@@ -356,7 +361,12 @@ export interface StepReq {
   hooks?: unknown | null
   enabled?: boolean
   ws_op_type?: string
+  ws_url?: string
+  ws_headers?: EnvMap | null
   ws_payload?: unknown | null
+  graphql_query?: string
+  graphql_variables?: unknown | null
+  graphql_operation?: string
 }
 
 export interface CaseConfig {

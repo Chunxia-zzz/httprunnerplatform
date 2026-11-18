@@ -63,9 +63,23 @@ type yamlTestStep struct {
 	Variables     jsonx.Map      `yaml:"variables,omitempty"`
 	SetupHooks    []string       `yaml:"setup_hooks,omitempty"`
 	Request       *yamlRequest   `yaml:"request,omitempty"`
+	WebSocket     *yamlWebSocket `yaml:"websocket,omitempty"`
 	Extract       map[string]any `yaml:"extract,omitempty"`
 	Validate      []yamlAssert   `yaml:"validate,omitempty"`
 	TeardownHooks []string       `yaml:"teardown_hooks,omitempty"`
+}
+
+// yamlWebSocket 对应 websocket 段（F10）。
+//
+// 引擎的 WS 步骤是**动作式**：type=open/ping/wr/w/r/close，
+// 每个动作都要带 url（连接按 URL 查找，缺 url 会报 no connection，实测 A26）。
+type yamlWebSocket struct {
+	Type    string         `yaml:"type"`
+	URL     string         `yaml:"url,omitempty"`
+	Params  jsonx.Map      `yaml:"params,omitempty"`
+	Headers map[string]any `yaml:"headers,omitempty"`
+	Text    any            `yaml:"text,omitempty"`
+	Timeout int64          `yaml:"timeout,omitempty"`
 }
 
 // yamlRequest 对应 request 段。

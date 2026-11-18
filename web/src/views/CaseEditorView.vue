@@ -25,6 +25,7 @@ import {
   type CaseReq,
   type DebugStepResult,
   type DatasetRef,
+  type EnvMap,
   type ModuleCount,
   type ParamDataset,
   type StepReq,
@@ -182,9 +183,25 @@ function toEditorStep(s: CaseDetail['steps'][number]): EditorStep {
   step.seq = s.seq
   step.name = s.name
   step.enabled = s.enabled
-  step.stepType = s.step_type === 'api' ? 'api' : 'request'
+  step.stepType =
+    s.step_type === 'api' || s.step_type === 'websocket' || s.step_type === 'graphql'
+      ? s.step_type
+      : 'request'
   step.refApiId = s.ref_api_id ? s.ref_api_id : null
   step.auth = (s.auth as typeof step.auth) ?? { type: 'inherit' }
+  step.wsOpType = (s.ws_op_type as typeof step.wsOpType) || 'wr'
+  step.wsUrl = s.ws_url ?? ''
+  step.wsHeaders = mapToRows(s.ws_headers)
+  step.wsPayload =
+    s.ws_payload == null
+      ? ''
+      : typeof s.ws_payload === 'string'
+        ? s.ws_payload
+        : JSON.stringify(s.ws_payload, null, 2)
+  step.gqlQuery = s.graphql_query ?? ''
+  step.gqlVariables =
+    s.graphql_variables == null ? '' : JSON.stringify(s.graphql_variables, null, 2)
+  step.gqlOperation = s.graphql_operation ?? ''
   step.method = (req.method || 'GET').toUpperCase()
   step.url = req.url || ''
   step.headers = mapToRows(req.headers)
@@ -302,6 +319,16 @@ function toStepReq(s: EditorStep): StepReq {
     step_type: isApi ? 'api' : 'request',
     ref_api_id: isApi && s.refApiId ? s.refApiId : 0,
     auth: s.auth,
+    ws_op_type: s.stepType === 'websocket' ? s.wsOpType : '',
+    ws_url: s.stepType === 'websocket' ? s.wsUrl.trim() : '',
+    ws_headers: s.stepType === 'websocket' ? (rowsToMap(s.wsHeaders) as EnvMap) : null,
+    ws_payload: s.stepType === 'websocket' && s.wsPayload ? s.wsPayload : null,
+    graphql_query: s.stepType === 'graphql' ? s.gqlQuery : '',
+    graphql_variables:
+      s.stepType === 'graphql' && s.gqlVariables.trim()
+        ? (JSON.parse(s.gqlVariables) as unknown)
+        : null,
+    graphql_operation: s.stepType === 'graphql' ? s.gqlOperation.trim() : '',
     request: isApi ? null : (req as StepReq['request']),
     variables: rowsToMap(s.variables),
     extract: s.extract.filter((e) => e.name.trim() !== '' || e.expression.trim() !== ''),

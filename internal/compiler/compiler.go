@@ -362,6 +362,40 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 			return ys, decl, fmt.Errorf("接口 %s 的定义不完整: %w", api.Code, err)
 		}
 
+	case model.StepWebSocket:
+		// WebSocket（F10）：动作式步骤，断言/提取作用于收到的消息（body）。
+		ws, err := renderWebSocket(st)
+		if err != nil {
+			return ys, decl, err
+		}
+		ys.WebSocket = ws
+		decl.StepType = model.StepWebSocket
+
+	case model.StepGraphql:
+		// GraphQL（F10）：编译成标准 HTTP POST，body = {query, variables, operationName}。
+		// 引擎无需知道这是 GraphQL —— 服务端契约本来就是这样一个 POST。
+		req, err := decodeRequest(st.Request)
+		if err != nil {
+			return ys, decl, err
+		}
+		req.Method = "POST"
+		req.BodyType = model.BodyTypeJSON
+		// ⭐ 实测 A28：GraphQL 的 `$id` 与平台的变量语法同形，不转义会被引擎当变量
+		// 替换（变量不存在则直接中止）。引擎的转义写法是 `$$` → 发出时还原成 `$`。
+		// 因此查询语句里的 `$` 一律转义；需要平台变量请写在 variables 里。
+		body := map[string]any{"query": escapeDollar(st.GraphqlQuery)}
+		if st.GraphqlVariables.Val != nil {
+			body["variables"] = st.GraphqlVariables.Val
+		}
+		if strings.TrimSpace(st.GraphqlOperation) != "" {
+			body["operationName"] = st.GraphqlOperation
+		}
+		req.Body = jsonx.Any{Val: body}
+		if err := renderRequestInto(&ys, &decl, req, merged, authHeaders, authParams); err != nil {
+			return ys, decl, err
+		}
+		decl.StepType = model.StepGraphql
+
 	case model.StepTestCase:
 		// 用例引用尚未开放（F1 只做接口引用，用例引用属后续里程碑）。
 		return ys, decl, fmt.Errorf(
@@ -682,4 +716,44 @@ func hasHeader(h map[string]any, name string) bool {
 		}
 	}
 	return false
+}
+
+// escapeDollar 把 `$` 转义成 `$$`（引擎的转义语法，实测 A28）。
+func escapeDollar(s string) string {
+	return strings.ReplaceAll(s, "$", "$$")
+}
+
+// renderWebSocket 把 WS 步骤渲染成引擎的 websocket 段（F10 / 实测 A26）。
+//
+// 三条硬约束都来自实测：
+//   - 动作必须显式（open/ping/wr/w/r/close），引擎不提供"一条步骤内自动开连接"；
+//   - **每个动作都要带 url**：连接按 URL 查找，缺 url 会报 no connection；
+//   - 引擎会把 URL 末尾补成 "/"（/ws → /ws/），服务端需容忍。
+func renderWebSocket(st model.TestStep) (*yamlWebSocket, error) {
+	op := strings.ToLower(strings.TrimSpace(st.WsOpType))
+	switch op {
+	case "open", "ping", "wr", "w", "r", "close":
+	default:
+		return nil, fmt.Errorf("WebSocket 步骤的动作 %q 不合法（只支持 open/ping/wr/w/r/close）", st.WsOpType)
+	}
+	url := strings.TrimSpace(st.WsURL)
+	if url == "" {
+		return nil, fmt.Errorf("WebSocket 步骤缺少 url（引擎按 URL 查找连接，每个动作都要带）")
+	}
+	if (op == "w" || op == "wr") && st.WsPayload.Val == nil {
+		return nil, fmt.Errorf("WebSocket 动作 %q 需要填写发送内容（text）", op)
+	}
+
+	ws := &yamlWebSocket{Type: op, URL: expandDynamic(url)}
+	if len(st.WsHeaders) > 0 {
+		h := make(map[string]any, len(st.WsHeaders))
+		for k, v := range st.WsHeaders {
+			h[k] = expandDynamicAny(v)
+		}
+		ws.Headers = h
+	}
+	if st.WsPayload.Val != nil {
+		ws.Text = expandDynamicAny(st.WsPayload.Val)
+	}
+	return ws, nil
 }

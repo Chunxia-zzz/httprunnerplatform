@@ -199,7 +199,14 @@ type StepReq struct {
 	Hooks     jsonx.Any                      `json:"hooks"`
 	Enabled   *bool                          `json:"enabled"`
 	WsOpType  string                         `json:"ws_op_type"`
+	WsURL     string                         `json:"ws_url"`
+	WsHeaders jsonx.Map                      `json:"ws_headers"`
 	WsPayload jsonx.Any                      `json:"ws_payload"`
+
+	// GraphQL（F10）：复用 Request 的 url/headers，这里只存查询本身。
+	GraphqlQuery     string    `json:"graphql_query"`
+	GraphqlVariables jsonx.Any `json:"graphql_variables"`
+	GraphqlOperation string    `json:"graphql_operation"`
 }
 
 // CaseReq 是创建/更新用例的请求（PUT 为全量覆盖）。
@@ -708,20 +715,25 @@ func stepSortKey(seq int) int {
 
 func toTestStep(req StepReq, seq int) model.TestStep {
 	st := model.TestStep{
-		Seq:       seq,
-		StepType:  normalizeStepType(req.StepType),
-		Name:      strings.TrimSpace(req.Name),
-		RefAPIID:  req.RefAPIID,
-		RefCaseID: req.RefCaseID,
-		Request:   req.Request,
-		Auth:      normalizeStepAuth(req.Auth),
-		Variables: req.Variables,
-		Extract:   req.Extract,
-		Validate:  req.Validate,
-		Hooks:     req.Hooks,
-		Enabled:   true,
-		WsOpType:  strings.TrimSpace(req.WsOpType),
-		WsPayload: req.WsPayload,
+		Seq:              seq,
+		StepType:         normalizeStepType(req.StepType),
+		Name:             strings.TrimSpace(req.Name),
+		RefAPIID:         req.RefAPIID,
+		RefCaseID:        req.RefCaseID,
+		Request:          req.Request,
+		Auth:             normalizeStepAuth(req.Auth),
+		Variables:        req.Variables,
+		Extract:          req.Extract,
+		Validate:         req.Validate,
+		Hooks:            req.Hooks,
+		Enabled:          true,
+		WsOpType:         strings.TrimSpace(req.WsOpType),
+		WsURL:            strings.TrimSpace(req.WsURL),
+		WsHeaders:        req.WsHeaders,
+		WsPayload:        req.WsPayload,
+		GraphqlQuery:     req.GraphqlQuery,
+		GraphqlVariables: req.GraphqlVariables,
+		GraphqlOperation: strings.TrimSpace(req.GraphqlOperation),
 	}
 	if req.Enabled != nil {
 		st.Enabled = *req.Enabled

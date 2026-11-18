@@ -247,6 +247,7 @@ const (
 	StepRendezvous  = "rendezvous"
 	StepThinkTime   = "think_time"
 	StepWebSocket   = "websocket"
+	StepGraphql     = "graphql"
 )
 
 // 提取对象。引擎只支持这 5 类。
@@ -488,9 +489,18 @@ type TestStep struct {
 	Hooks     jsonx.Any                `gorm:"type:text" json:"hooks"`
 	Enabled   bool                     `gorm:"not null" json:"enabled"`
 	// Auth 是步骤级认证覆盖（F7）：type=inherit 时沿用环境配置。
-	Auth      AuthConfig `gorm:"type:text;not null;default:''" json:"auth"`
-	WsOpType  string     `gorm:"size:16;not null;default:''" json:"ws_op_type"`
-	WsPayload jsonx.Any  `gorm:"type:text" json:"ws_payload"`
+	Auth AuthConfig `gorm:"type:text;not null;default:''" json:"auth"`
+	// WebSocket 步骤（F10）：动作式，每个动作都要带 ws_url（实测 A26）。
+	WsOpType  string    `gorm:"size:16;not null;default:''" json:"ws_op_type"` // open/ping/wr/w/r/close
+	WsURL     string    `gorm:"size:512;not null;default:''" json:"ws_url"`
+	WsHeaders jsonx.Map `gorm:"type:text" json:"ws_headers"`
+	WsPayload jsonx.Any `gorm:"type:text" json:"ws_payload"` // text 帧内容
+
+	// GraphQL 步骤（F10）：编译成 POST + JSON {query, variables, operationName}。
+	// 复用 Request 的 url/headers，只额外存查询本身。
+	GraphqlQuery     string    `gorm:"type:text" json:"graphql_query"`
+	GraphqlVariables jsonx.Any `gorm:"type:text" json:"graphql_variables"`
+	GraphqlOperation string    `gorm:"size:128;not null;default:''" json:"graphql_operation"`
 }
 
 // ParamDataset 是参数化数据集（M3 启用）。

@@ -57,6 +57,7 @@ const (
 	CodeNoValidate            = "NO_VALIDATE"
 	CodePlaintextSecret       = "PLAINTEXT_SECRET"
 	CodeUnsupportedStepType   = "UNSUPPORTED_STEP_TYPE"
+	CodeBadStepConfig         = "BAD_STEP_CONFIG"
 	CodeInvalidBodyType       = "INVALID_BODY_TYPE"
 	CodeMissingCaseName       = "MISSING_CASE_NAME"
 	CodeMissingMethod         = "MISSING_METHOD"
@@ -277,6 +278,10 @@ func validateStep(r *Result, in *Input, tc *model.TestCase, st model.TestStep, s
 		validateRequestStep(r, st, stepScope, extractNames)
 	case model.StepAPI:
 		validateAPIStep(r, st, in, stepScope, extractNames)
+	case model.StepWebSocket:
+		validateWebSocketStep(r, st, stepScope, extractNames)
+	case model.StepGraphql:
+		validateGraphqlStep(r, st, stepScope, extractNames)
 	case model.StepTestCase:
 		// 用例引用尚未开放（F1 只做接口引用）。
 		if st.RefCaseID == 0 {
@@ -289,7 +294,7 @@ func validateStep(r *Result, in *Input, tc *model.TestCase, st model.TestStep, s
 			"步骤「%s」的类型 %q 尚未开放", st.Name, st.StepType)
 	default:
 		r.errf(ScopeStep, st.Seq, "step_type", CodeUnsupportedStepType,
-			"当前支持「直接请求」与「引用接口」",
+			"当前支持「直接请求」「引用接口」「WebSocket」「GraphQL」",
 			"步骤「%s」的类型 %q 不受支持", st.Name, st.StepType)
 	}
 
@@ -337,6 +342,64 @@ func validateAPIStep(r *Result, st model.TestStep, in *Input, scope *varScope, e
 	checkRefsIn(r, ScopeStep, st.Seq, "ref.params", api.Params, scope)
 	checkRefsIn(r, ScopeStep, st.Seq, "ref.headers", api.Headers, scope)
 	checkRefsIn(r, ScopeStep, st.Seq, "ref.body", api.Body.Val, scope)
+
+	validateExtractAndAssert(r, st, scope, extractNames)
+}
+
+// validateWebSocketStep 校验 WS 步骤（F10 / 实测 A26）。
+func validateWebSocketStep(r *Result, st model.TestStep, scope *varScope, extractNames map[string]bool) {
+	op := strings.ToLower(strings.TrimSpace(st.WsOpType))
+	switch op {
+	case "open", "ping", "wr", "w", "r", "close":
+	default:
+		r.errf(ScopeStep, st.Seq, "ws_op_type", CodeBadStepConfig,
+			"动作只支持 open / ping / wr / w / r / close（引擎按动作执行）",
+			"步骤「%s」的 WebSocket 动作 %q 不合法", st.Name, st.WsOpType)
+	}
+	url := strings.TrimSpace(st.WsURL)
+	if url == "" {
+		r.errf(ScopeStep, st.Seq, "ws_url", CodeMissingURL,
+			"引擎按 URL 查找连接，每个动作都要填 ws:// 或 wss:// 地址",
+			"步骤「%s」缺少 WebSocket 地址", st.Name)
+	} else if !strings.HasPrefix(url, "ws://") && !strings.HasPrefix(url, "wss://") &&
+		!strings.HasPrefix(url, "$") && !strings.HasPrefix(url, "{{") {
+		r.warnf(ScopeStep, st.Seq, "ws_url", CodeMissingURL,
+			"WebSocket 地址通常以 ws:// 或 wss:// 开头（也可用变量）",
+			"步骤「%s」的地址 %q 不是 ws:// / wss:// 形式", st.Name, url)
+	}
+	if (op == "w" || op == "wr") && st.WsPayload.Val == nil {
+		r.errf(ScopeStep, st.Seq, "ws_payload", CodeBadStepConfig,
+			"动作 w / wr 需要填写要发送的文本内容",
+			"步骤「%s」的 WebSocket 动作 %q 缺少发送内容", st.Name, op)
+	}
+	checkRefsIn(r, ScopeStep, st.Seq, "ws.url", st.WsURL, scope)
+	checkRefsIn(r, ScopeStep, st.Seq, "ws.headers", st.WsHeaders, scope)
+	checkRefsIn(r, ScopeStep, st.Seq, "ws.payload", st.WsPayload.Val, scope)
+
+	validateExtractAndAssert(r, st, scope, extractNames)
+}
+
+// validateGraphqlStep 校验 GraphQL 步骤（F10）：本质是一次 POST，必须有查询语句。
+func validateGraphqlStep(r *Result, st model.TestStep, scope *varScope, extractNames map[string]bool) {
+	req, err := decodeRequest(st.Request)
+	if err != nil {
+		r.errf(ScopeStep, st.Seq, "request", CodeBadStepConfig,
+			"GraphQL 步骤需要填写地址（url）", "步骤「%s」的请求体无法解析：%v", st.Name, err)
+		return
+	}
+	if strings.TrimSpace(req.URL) == "" {
+		r.errf(ScopeStep, st.Seq, "request.url", CodeMissingURL,
+			"GraphQL 服务地址，如 $base_url/graphql",
+			"步骤「%s」缺少 GraphQL 地址", st.Name)
+	}
+	if strings.TrimSpace(st.GraphqlQuery) == "" {
+		r.errf(ScopeStep, st.Seq, "graphql_query", CodeBadStepConfig,
+			"填写 GraphQL 查询语句，如 { user(id: 1) { name } }",
+			"步骤「%s」缺少 GraphQL 查询语句", st.Name)
+	}
+	checkRefsIn(r, ScopeStep, st.Seq, "graphql.query", st.GraphqlQuery, scope)
+	checkRefsIn(r, ScopeStep, st.Seq, "graphql.variables", st.GraphqlVariables.Val, scope)
+	checkRefsIn(r, ScopeStep, st.Seq, "request.url", req.URL, scope)
 
 	validateExtractAndAssert(r, st, scope, extractNames)
 }
