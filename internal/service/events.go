@@ -126,14 +126,19 @@ func (h *EventHub) Close() {
 
 // publishStatus 推送执行状态变化。
 func (s *RunService) publishStatus(runID uint64, status string, total int, finished bool) {
-	if s.Events == nil {
-		return
+	if s.Events != nil {
+		ev := RunEvent{RunID: runID, Type: EventStatus, Status: status, Total: total, Finished: finished}
+		if finished {
+			ev.Type = EventFinished
+		}
+		s.Events.Publish(ev)
 	}
-	ev := RunEvent{RunID: runID, Type: EventStatus, Status: status, Total: total, Finished: finished}
-	if finished {
-		ev.Type = EventFinished
+
+	// 通知（F2）：终态时异步派发。独立于 Events 判断——即使没人在订阅进度，
+	// 通知也必须发出去；且群机器人慢绝不能拖住执行收尾。
+	if finished && s.Notifier != nil {
+		go s.Notifier.DispatchRun(runID, status)
 	}
-	s.Events.Publish(ev)
 }
 
 // publishCase 推送用例集里单条用例的结果。

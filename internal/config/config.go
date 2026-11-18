@@ -47,6 +47,9 @@ type ServerConfig struct {
 	Mode string `yaml:"mode"`
 	// AutoMigrate 为 true 时，服务启动时自动执行数据库迁移。
 	AutoMigrate bool `yaml:"auto_migrate"`
+	// PublicURL 是平台对外地址（如 https://hrp.example.com），用于通知里拼执行详情链接。
+	// 为空时不加链接——不猜地址：猜出来的链接点进去 404 比没有更糟。
+	PublicURL string `yaml:"public_url"`
 }
 
 // Addr 返回 gin 监听地址。

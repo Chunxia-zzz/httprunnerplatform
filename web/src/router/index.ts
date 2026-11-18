@@ -43,6 +43,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调试台' },
       },
       {
+        // 通知设置：执行结束推送到群机器人
+        path: 'notify',
+        name: 'notify',
+        component: () => import('@/views/NotifyView.vue'),
+        meta: { title: '通知设置' },
+      },
+      {
         // 失败聚类：基于执行结果的诊断视图
         path: 'failures',
         name: 'failures',

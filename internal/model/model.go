@@ -790,6 +790,25 @@ type APIToken struct {
 }
 
 // NotifyConfig 是通知配置（M2 启用）。
+// NotifyLog 是一条通知投递记录（F2）。
+//
+// 失败也记录：群机器人配错了，用户第一反应是"为什么没收到"，
+// 没有投递记录就只能去翻服务日志。
+type NotifyLog struct {
+	Base
+	ProjectID  uint64 `gorm:"not null;index" json:"project_id"`
+	ConfigID   uint64 `gorm:"not null;index" json:"config_id"`
+	RunID      uint64 `gorm:"not null;default:0" json:"run_id"`
+	Channel    string `gorm:"size:16;not null" json:"channel"`
+	Status     string `gorm:"size:16;not null" json:"status"` // success / failed
+	HTTPStatus int    `gorm:"not null;default:0" json:"http_status"`
+	Response   string `gorm:"size:512;not null;default:''" json:"response"`
+	Attempts   int    `gorm:"not null;default:0" json:"attempts"`
+	Error      string `gorm:"size:512;not null;default:''" json:"error"`
+}
+
+func (NotifyLog) TableName() string { return "notify_log" }
+
 type NotifyConfig struct {
 	SoftBase
 	ProjectID uint64    `gorm:"not null;index" json:"project_id"`
@@ -844,6 +863,7 @@ func AllModels() []any {
 		&AssertionResult{},
 		&APIToken{},
 		&ShareLink{},
+		&NotifyLog{},
 		&ProjectMember{},
 		&ChangeLog{},
 		&NotifyConfig{},

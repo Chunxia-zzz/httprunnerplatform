@@ -151,6 +151,39 @@ export interface ProjectReq {
 /** 环境的变量表。值一律被后端转成字符串写入 .env。 */
 export type EnvMap = Record<string, unknown>
 
+/** 通知配置（F2）。 */
+export interface NotifyConfig {
+  id: ID
+  name: string
+  channel: 'wecom' | 'dingtalk' | 'feishu' | 'webhook' | string
+  webhook_url: string
+  has_secret: boolean
+  on_success: boolean
+  created_at: string
+}
+
+export interface NotifyLog {
+  id: ID
+  project_id: ID
+  config_id: ID
+  run_id: ID
+  channel: string
+  status: 'success' | 'failed' | string
+  http_status: number
+  response: string
+  attempts: number
+  error: string
+  created_at: string
+}
+
+export interface NotifySendResult {
+  ok: boolean
+  http_status: number
+  attempts: number
+  response: string
+  error: string
+}
+
 /** 失败聚类（F13）。 */
 export interface FailureCaseItem {
   case_id: ID

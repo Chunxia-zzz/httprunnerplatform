@@ -98,6 +98,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerPerfRoutes(authed, deps)
 		registerHealthRoutes(authed, deps)
 		registerFailureRoutes(authed, deps)
+		registerNotifyRoutes(authed, deps)
 	}
 
 	// ⭐ CI 入口单独一个前缀：不走会话体系，语义与限流都和页面上的人不同，
@@ -128,6 +129,18 @@ func registerMemberRoutes(g *gin.RouterGroup, deps *Deps) {
 	admins := g.Group("/projects/:id/members", middleware.RequireAdmin())
 	admins.POST("", h.Add)
 	admins.DELETE("/:userId", h.Remove)
+}
+
+// registerNotifyRoutes 注册通知配置与投递记录（F2）。
+func registerNotifyRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newNotifyHandler(deps)
+	g.GET("/projects/:id/notifications", h.List)
+	g.GET("/projects/:id/notifications/logs", h.Logs)
+	admins := g.Group("", middleware.RequireAdmin())
+	admins.POST("/projects/:id/notifications", h.Create)
+	admins.PUT("/notifications/:id", h.Update)
+	admins.DELETE("/notifications/:id", h.Delete)
+	admins.POST("/notifications/:id/test", h.Test)
 }
 
 // registerFailureRoutes 注册失败聚类（F13）。

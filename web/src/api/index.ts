@@ -22,6 +22,7 @@ export * as changeApi from './changes'
 export * as perfApi from './perf'
 export * as healthApi from './health'
 export * as failureApi from './failures'
+export * as notifyApi from './notify'
 export * as baselineApi from './baseline'
 
 // ---------------------------------------------------------------------------

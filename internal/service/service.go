@@ -36,6 +36,8 @@ type Deps struct {
 	Sessions *auth.Store
 	// Events 是执行进度广播（F9）。进程内，不落库。
 	Events *EventHub
+	// Notifier 用于执行结束后的群机器人推送（F2）。
+	Notifier *NotifyService
 }
 
 // Set 汇总全部 service，供上层一次性注入与优雅关闭。
@@ -66,6 +68,7 @@ type Set struct {
 	Perf    *PerfService
 	Health  *HealthService
 	Failure *FailureClusterService
+	Notify  *NotifyService
 }
 
 // New 构造全部 service。
@@ -75,6 +78,9 @@ func New(d Deps) *Set {
 	if d.Events == nil {
 		d.Events = NewEventHub()
 	}
+	// RunService 通过 Deps.Notifier 在终态派发通知，因此必须先构造好再传 d。
+	notifier := &NotifyService{Deps: d}
+	d.Notifier = notifier
 	caseSvc := &CaseService{Deps: d}
 	return &Set{
 		Project:     &ProjectService{Deps: d},
@@ -102,6 +108,7 @@ func New(d Deps) *Set {
 		Perf:        &PerfService{Deps: d},
 		Health:      &HealthService{Deps: d},
 		Failure:     &FailureClusterService{Deps: d},
+		Notify:      notifier,
 	}
 }
 

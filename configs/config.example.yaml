@@ -10,6 +10,9 @@ server:
   host: 0.0.0.0
   port: 8080
   mode: release # debug | release
+  # 平台对外地址，用于通知里拼「执行详情」链接（如 https://hrp.example.com）。
+  # 留空则通知不带链接——不猜地址：猜错的链接比没有更糟。
+  public_url: ""
 
 database:
   # ⭐ 默认 SQLite：单文件交付的天然搭配（部署 = 一个 exe + 一个 db 文件，
