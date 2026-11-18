@@ -151,6 +151,43 @@ export interface ProjectReq {
 /** 环境的变量表。值一律被后端转成字符串写入 .env。 */
 export type EnvMap = Record<string, unknown>
 
+/** 性能趋势点（F11）。 */
+export interface PerfPoint {
+  run_id: ID
+  at: string
+  ms: number
+}
+
+/** 单接口的性能对比项。 */
+export interface PerfItem {
+  method: string
+  path: string
+  endpoint: string
+  latest_run_id: ID
+  latest_at: string
+  latest_ms: number
+  baseline_ms: number
+  samples: number
+  delta_ms: number
+  delta_pct: number
+  verdict: 'regressed' | 'improved' | 'stable' | 'insufficient' | 'no_baseline' | string
+  trend: PerfPoint[]
+}
+
+export interface PerfResult {
+  items: PerfItem[]
+  summary: { endpoints: number; regressed: number; improved: number; stable: number; insufficient: number }
+  applied: {
+    run_id: number
+    days: number
+    baseline_runs: number
+    min_samples: number
+    threshold_pct: number
+    min_delta_ms: number
+    verdict: string
+  }
+}
+
 /** 项目成员（F8）。 */
 export interface ProjectMember {
   user_id: ID

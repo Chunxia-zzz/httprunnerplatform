@@ -19,6 +19,7 @@ export * as openapiApi from './openapi'
 export * as docsApi from './docs'
 export * as memberApi from './members'
 export * as changeApi from './changes'
+export * as perfApi from './perf'
 export * as baselineApi from './baseline'
 
 // ---------------------------------------------------------------------------

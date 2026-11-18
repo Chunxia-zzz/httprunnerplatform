@@ -18,6 +18,7 @@ import { ElMessageBox } from 'element-plus'
 import {
   caseApi,
   isTerminalRun,
+  perfApi,
   runApi,
   type CaseSteps,
   type RunDetail,
@@ -45,6 +46,9 @@ const failed = ref('')
 
 const activeTab = ref<'steps' | 'report' | 'logs'>('steps')
 
+/** 本次执行的接口级性能回归数（F11）；0 表示不显示入口 */
+const regressedCount = ref(0)
+
 /** 声明 URL 对照表，key = `${case_code}#${seq}`。 */
 const declaredUrls = ref<Record<string, string>>({})
 
@@ -66,6 +70,7 @@ async function loadDetail(silent = false) {
     if (terminal.value) {
       stopUpdates()
       await loadFinalArtifacts()
+      void loadPerf()
     } else {
       startUpdates()
     }
@@ -74,6 +79,18 @@ async function loadDetail(silent = false) {
     stopUpdates()
   } finally {
     loading.value = false
+  }
+}
+
+/** 拉本次执行的性能回归结论：只关心"有几个接口变慢"。 */
+async function loadPerf() {
+  const pid = run.value?.project_id
+  if (!pid) return
+  try {
+    const r = await perfApi.getPerf(pid, { run_id: runId.value })
+    regressedCount.value = r.summary.regressed
+  } catch {
+    regressedCount.value = 0
   }
 }
 

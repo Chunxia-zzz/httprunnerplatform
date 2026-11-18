@@ -43,6 +43,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调试台' },
       },
       {
+        // 性能回归：基于执行数据聚合，放在执行记录之后
+        path: 'perf',
+        name: 'perf',
+        component: () => import('@/views/PerfView.vue'),
+        meta: { title: '性能回归' },
+      },
+      {
         // 变更历史：审计入口，放在编排层页面之后
         path: 'changes',
         name: 'changes',

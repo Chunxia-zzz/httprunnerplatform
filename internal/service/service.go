@@ -63,6 +63,7 @@ type Set struct {
 	// Events 是执行进度广播（F9）
 	Events *EventHub
 	Audit  *AuditService
+	Perf   *PerfService
 }
 
 // New 构造全部 service。
@@ -96,6 +97,7 @@ func New(d Deps) *Set {
 		Member:      &MemberService{Deps: d},
 		Events:      d.Events,
 		Audit:       &AuditService{Deps: d},
+		Perf:        &PerfService{Deps: d},
 	}
 }
 
