@@ -88,6 +88,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerUserRoutes(authed, deps)
 		registerTokenRoutes(authed, deps)
 		registerMockAdminRoutes(authed, deps)
+		registerDocRoutes(authed, deps)
 	}
 
 	// ⭐ CI 入口单独一个前缀：不走会话体系，语义与限流都和页面上的人不同，
@@ -102,7 +103,21 @@ func NewRouter(deps *Deps) *gin.Engine {
 	mock := r.Group("/mock")
 	registerMockPublicRoutes(mock, deps)
 
+	// 文档只读分享（F6）：与 /open 的 CI 令牌是两套东西，直接挂引擎。
+	// 用 Any 注册再在 handler 里拒绝非 GET —— 保证方法错误时是 405 而不是 404。
+	r.Any("/open/docs/:token", newDocHandler(deps).PublicDoc)
+
 	return r
+}
+
+// registerDocRoutes 注册接口文档与分享链接管理（需登录）。
+func registerDocRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newDocHandler(deps)
+	g.GET("/projects/:id/docs", h.Get)
+	g.GET("/projects/:id/docs/html", h.HTML)
+	g.GET("/projects/:id/shares", h.ListShares)
+	g.POST("/projects/:id/shares", h.CreateShare)
+	g.DELETE("/projects/:id/shares/:shareId", h.RevokeShare)
 }
 
 // registerMockPublicRoutes 注册公开的 Mock 端点（F4）。

@@ -887,6 +887,55 @@ export interface DebugRequestReq {
   timeout_sec?: number
 }
 
+/** 接口文档（F6）：一个接口。 */
+export interface DocAPI {
+  code: string
+  name: string
+  method: string
+  path: string
+  description: string
+  headers?: EnvMap | null
+  params?: EnvMap | null
+  body_type: string
+  body_text?: string
+  response_type: string
+  response_text?: string
+  cases: { code: string; name: string; last_status: string }[]
+}
+
+export interface DocGroup {
+  module: string
+  apis: DocAPI[]
+}
+
+export interface APIDoc {
+  project: string
+  project_code: string
+  generated_at: string
+  total_apis: number
+  covered_apis: number
+  groups: DocGroup[]
+}
+
+/** 分享链接列表项（token 只给前缀）。 */
+export interface ShareLink {
+  id: ID
+  name: string
+  prefix: string
+  status: 'active' | 'expired' | string
+  expires_at: string | null
+  created_at: string
+}
+
+/** 创建分享链接的返回（token 仅此一次）。 */
+export interface IssuedShare {
+  id: ID
+  name: string
+  token: string
+  path: string
+  expires_at: string | null
+}
+
 /** OpenAPI 导入（F5）的一条候选接口。 */
 export interface ImportedAPI {
   code: string

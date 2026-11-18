@@ -25,6 +25,7 @@ const ALL_NAV = [
   { name: 'console', label: '调试台', icon: 'Position', admin: false },
   { name: 'apis', label: '接口库', icon: 'Connection', admin: false },
   { name: 'mock', label: 'Mock 服务', icon: 'Monitor', admin: false },
+  { name: 'docs', label: '接口文档', icon: 'DocumentCopy', admin: false },
   { name: 'cases', label: '用例管理', icon: 'Document', admin: false },
   { name: 'datasets', label: '参数化数据集', icon: 'Grid', admin: false },
   { name: 'suites', label: '用例集', icon: 'Files', admin: false },

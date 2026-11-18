@@ -55,6 +55,8 @@ type Set struct {
 	API         *APIService
 	Mock        *MockService
 	OpenAPI     *OpenAPIService
+	Doc         *DocService
+	Share       *ShareService
 }
 
 // New 构造全部 service。
@@ -78,6 +80,8 @@ func New(d Deps) *Set {
 		API:         &APIService{Deps: d},
 		Mock:        &MockService{Deps: d, hits: map[uint64][]MockHit{}},
 		OpenAPI:     &OpenAPIService{Deps: d},
+		Doc:         &DocService{Deps: d},
+		Share:       &ShareService{Deps: d},
 	}
 }
 

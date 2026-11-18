@@ -681,6 +681,24 @@ type AssertionResult struct {
 	Msg             string `gorm:"size:512;not null;default:''" json:"msg"`
 }
 
+// ShareLink 是接口文档的只读分享链接（F6）。
+//
+// 与 APIToken 同一条原则：库里只存哈希，明文仅创建时返回一次。
+// 与 APIToken 的差别：分享链接**没有写权限**，只能读文档；吊销 = 删除。
+type ShareLink struct {
+	Base
+	ProjectID uint64 `gorm:"not null;index" json:"project_id"`
+	Name      string `gorm:"size:64;not null;default:''" json:"name"`
+	// TokenHash 是 sha256(明文) 的 hex；唯一索引保证「一链一记录」。
+	TokenHash string `gorm:"size:128;not null;uniqueIndex" json:"-"`
+	// ExpiresAt 为空表示永久有效。
+	ExpiresAt *time.Time `json:"expires_at"`
+	CreatedBy uint64     `gorm:"not null;default:0" json:"created_by"`
+}
+
+// TableName 显式指定表名（与项目其它模型一致，避免复数化差异）。
+func (ShareLink) TableName() string { return "share_link" }
+
 // APIToken 是 CI 令牌。
 //
 // ⭐ 库里**只存哈希**，不存明文（设计文档决策 4）。
@@ -763,6 +781,7 @@ func AllModels() []any {
 		&StepResult{},
 		&AssertionResult{},
 		&APIToken{},
+		&ShareLink{},
 		&NotifyConfig{},
 	}
 }

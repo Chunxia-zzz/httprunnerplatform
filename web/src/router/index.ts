@@ -43,6 +43,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调试台' },
       },
       {
+        // 文档是接口库的只读出口（可分享给非平台用户）
+        path: 'docs',
+        name: 'docs',
+        component: () => import('@/views/DocsView.vue'),
+        meta: { title: '接口文档' },
+      },
+      {
         // Mock 是接口库的下游能力（按接口定义自动生成），紧跟在后面
         path: 'mock',
         name: 'mock',
