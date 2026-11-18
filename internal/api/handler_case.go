@@ -1,18 +1,23 @@
 package api
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/service"
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/response"
 )
 
-type caseHandler struct{ svc *service.CaseService }
+type caseHandler struct {
+	svc  *service.CaseService
+	deps *Deps
+}
 
 func newCaseHandler(deps *Deps) *caseHandler {
-	return &caseHandler{svc: deps.Services.Case}
+	return &caseHandler{svc: deps.Services.Case, deps: deps}
 }
 
 type caseListQuery struct {
@@ -96,6 +101,8 @@ func (h *caseHandler) Create(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, projectID, service.ChangeCreate, service.EntityCase, detail.ID,
+		detail.Code, "新建用例「"+detail.Name+"」（"+detail.Code+"）")
 	OK(c, detail)
 }
 
@@ -110,11 +117,18 @@ func (h *caseHandler) Update(c *gin.Context) {
 		Fail(c, response.CodeBadParam, "请求体非法："+err.Error())
 		return
 	}
+	old, err := h.svc.Get(id)
+	if err != nil {
+		WriteError(c, err)
+		return
+	}
 	detail, err := h.svc.Update(id, req)
 	if err != nil {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, detail.ProjectID, service.ChangeUpdate, service.EntityCase, detail.ID,
+		detail.Code, caseDiffSummary(old, req, detail))
 	OK(c, detail)
 }
 
@@ -124,10 +138,17 @@ func (h *caseHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
+	old, err := h.svc.Get(id)
+	if err != nil {
+		WriteError(c, err)
+		return
+	}
 	if err := h.svc.Delete(id); err != nil {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, old.ProjectID, service.ChangeDelete, service.EntityCase, old.ID,
+		old.Code, "删除用例「"+old.Name+"」（"+old.Code+"）")
 	OK(c, nil)
 }
 
@@ -198,4 +219,45 @@ func (h *caseHandler) Validate(c *gin.Context) {
 		return
 	}
 	OK(c, out)
+}
+
+// caseDiffSummary 生成用例修改的结构化差异摘要（F8）。
+//
+// 只比较**结构性字段**（名称/模块/步骤数/断言数）：字段级完整 diff 噪音太大，
+// 而「步骤 2 → 3」这类信息已经能回答「谁把用例改坏了」。
+func caseDiffSummary(old *service.CaseDetail, req service.CaseReq, now *service.CaseDetail) string {
+	var parts []string
+	oldName, newName := old.Name, now.Name
+	if oldName != newName {
+		parts = append(parts, "名称「"+oldName+"」→「"+newName+"」")
+	}
+	if old.Module != now.Module {
+		parts = append(parts, "模块「"+orDash(old.Module)+"」→「"+orDash(now.Module)+"」")
+	}
+	if len(old.Steps) != len(now.Steps) {
+		parts = append(parts, "步骤 "+strconv.Itoa(len(old.Steps))+" → "+strconv.Itoa(len(now.Steps)))
+	}
+	oldAsserts, newAsserts := countAsserts(old.Steps), countAsserts(now.Steps)
+	if oldAsserts != newAsserts {
+		parts = append(parts, "断言 "+strconv.Itoa(oldAsserts)+" → "+strconv.Itoa(newAsserts))
+	}
+	if len(parts) == 0 {
+		return "修改用例「" + now.Name + "」（" + now.Code + "），未检测到结构性差异"
+	}
+	return "修改用例「" + now.Name + "」：" + strings.Join(parts, "；")
+}
+
+func countAsserts(steps []model.TestStep) int {
+	n := 0
+	for _, st := range steps {
+		n += len(st.Validate)
+	}
+	return n
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "未分类"
+	}
+	return s
 }

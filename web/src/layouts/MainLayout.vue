@@ -31,6 +31,7 @@ const ALL_NAV = [
   { name: 'suites', label: '用例集', icon: 'Files', admin: false },
   { name: 'plans', label: '测试计划', icon: 'Timer', admin: false },
   { name: 'runs', label: '执行记录', icon: 'VideoPlay', admin: false },
+  { name: 'changes', label: '变更历史', icon: 'Tickets', admin: false },
   { name: 'stats', label: '统计看板', icon: 'DataAnalysis', admin: false },
   { name: 'tokens', label: 'CI 令牌', icon: 'Key', admin: false },
   { name: 'environments', label: '环境管理', icon: 'Setting', admin: false },

@@ -7,10 +7,13 @@ import (
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/response"
 )
 
-type paramHandler struct{ svc *service.ParamService }
+type paramHandler struct {
+	svc  *service.ParamService
+	deps *Deps
+}
 
 func newParamHandler(deps *Deps) *paramHandler {
-	return &paramHandler{svc: deps.Services.Param}
+	return &paramHandler{svc: deps.Services.Param, deps: deps}
 }
 
 // List 数据集列表。
@@ -43,6 +46,8 @@ func (h *paramHandler) Create(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, id, service.ChangeCreate, service.EntityDataset, v.ID,
+		v.Name, "新建参数集「"+v.Name+"」")
 	OK(c, v)
 }
 
@@ -76,6 +81,8 @@ func (h *paramHandler) Update(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, v.ProjectID, service.ChangeUpdate, service.EntityDataset, v.ID,
+		v.Name, "修改参数集「"+v.Name+"」")
 	OK(c, v)
 }
 

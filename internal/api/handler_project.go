@@ -26,7 +26,8 @@ func (h *projectHandler) List(c *gin.Context) {
 		return
 	}
 
-	list, total, err := h.svc.List(service.ProjectListQuery{Keyword: q.Keyword}, q.toPage())
+	list, total, err := h.svc.List(service.ProjectListQuery{Keyword: q.Keyword}, q.toPage(),
+		currentUserID(c), currentIsAdmin(c))
 	if err != nil {
 		WriteError(c, err)
 		return

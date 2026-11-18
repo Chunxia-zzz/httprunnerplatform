@@ -10,7 +10,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 
-import { projectApi, type Project, type ProjectReq } from '@/api'
+import { memberApi, projectApi, type Project, type ProjectMember, type ProjectReq } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectStore } from '@/stores/project'
 import { formatTime } from '@/utils/format'
@@ -21,6 +21,72 @@ const projects = useProjectStore()
 const auth = useAuthStore()
 
 const keyword = ref('')
+
+// ---- 项目成员（F8）----
+const memberDrawer = ref(false)
+const memberProject = ref<Project | null>(null)
+const members = ref<ProjectMember[]>([])
+const memberLoading = ref(false)
+const addForm = reactive({ username: '', role: 'member' })
+const adding = ref(false)
+
+async function openMembers(row: unknown) {
+  memberProject.value = row as Project
+  memberDrawer.value = true
+  addForm.username = ''
+  addForm.role = 'member'
+  await loadMembers()
+}
+
+async function loadMembers() {
+  if (!memberProject.value) return
+  memberLoading.value = true
+  try {
+    members.value = await memberApi.listMembers(memberProject.value.id)
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    memberLoading.value = false
+  }
+}
+
+async function addMember() {
+  if (!memberProject.value || !addForm.username.trim()) return
+  adding.value = true
+  try {
+    await memberApi.addMember(memberProject.value.id, {
+      username: addForm.username.trim(),
+      role: addForm.role,
+    })
+    notifyOk('已加入项目')
+    addForm.username = ''
+    await loadMembers()
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    adding.value = false
+  }
+}
+
+async function removeMember(m: ProjectMember) {
+  if (!memberProject.value) return
+  try {
+    await ElMessageBox.confirm(
+      `移除后 ${m.username} 将无法访问该项目（历史记录保留）。确定移除？`,
+      '移除成员',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await memberApi.removeMember(memberProject.value.id, m.user_id)
+    notifyOk('已移除')
+    await loadMembers()
+  } catch (e) {
+    notifyError(e)
+  }
+}
 const loading = ref(false)
 
 const dialogVisible = ref(false)
@@ -216,6 +282,12 @@ onMounted(load)
             <span class="hrp-mono hrp-muted">{{ row.workspace_path || '—' }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="可见性" width="110">
+          <template #default="{ row }">
+            <el-tag v-if="row.access_restricted" size="small" type="warning" effect="plain">仅成员</el-tag>
+            <el-tag v-else size="small" type="info" effect="plain">全员可见</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="创建时间" width="170">
           <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
         </el-table-column>
@@ -223,6 +295,7 @@ onMounted(load)
           <template #default="{ row }">
             <el-button link type="primary" @click="enter(row)">进入</el-button>
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button link type="primary" @click="openMembers(row)">成员</el-button>
             <el-button link type="primary" :loading="exportingId === row.id" @click="exportRow(row)">导出</el-button>
             <!--
               删除项目会连带环境与用例，破坏性最大，后端已收紧为管理员专属。
@@ -275,10 +348,76 @@ onMounted(load)
         <el-button type="primary" :loading="submitting" @click="submit">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="memberDrawer" :title="`项目成员 · ${memberProject?.name ?? ''}`" size="460px">
+      <el-alert
+        :type="memberProject?.access_restricted ? 'warning' : 'info'"
+        :closable="false"
+        show-icon
+        class="member-tip"
+        :title="
+          memberProject?.access_restricted
+            ? '该项目已限制访问：仅成员可见'
+            : '尚未添加成员的项目对所有登录用户可见'
+        "
+      >
+        {{
+          memberProject?.access_restricted
+            ? '移除成员会立即生效；移除最后一个成员也不会自动恢复为全员可见（避免误开放）。'
+            : '添加第一个成员后，项目立即收敛为「仅成员可见」，且不会自动回退。项目所有者始终在名单里且不可移除。'
+        }}
+      </el-alert>
+
+      <div v-if="auth.isAdmin" class="member-add">
+        <el-input v-model="addForm.username" placeholder="用户名" style="width: 180px" />
+        <el-select v-model="addForm.role" style="width: 110px">
+          <el-option label="成员" value="member" />
+          <el-option label="所有者" value="owner" />
+        </el-select>
+        <el-button type="primary" :loading="adding" :disabled="!addForm.username.trim()" @click="addMember">
+          添加
+        </el-button>
+      </div>
+
+      <el-table v-loading="memberLoading" :data="members" border stripe size="small">
+        <el-table-column prop="username" label="用户名" min-width="140" />
+        <el-table-column prop="nickname" label="昵称" min-width="120" />
+        <el-table-column label="角色" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.role === 'owner' ? 'warning' : 'info'" effect="plain">
+              {{ row.role === 'owner' ? '所有者' : '成员' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="80">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="danger"
+              :disabled="!auth.isAdmin || row.role === 'owner'"
+              @click="removeMember(row as ProjectMember)"
+            >
+              移除
+            </el-button>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <p class="hrp-muted">还没有成员：该项目当前对所有登录用户可见。</p>
+        </template>
+      </el-table>
+    </el-drawer>
   </div>
 </template>
 
 <style scoped>
+.member-tip {
+  margin-bottom: 12px;
+}
+.member-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .form-tip {
   font-size: 12px;
   line-height: 1.6;

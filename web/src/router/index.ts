@@ -43,6 +43,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调试台' },
       },
       {
+        // 变更历史：审计入口，放在编排层页面之后
+        path: 'changes',
+        name: 'changes',
+        component: () => import('@/views/ChangesView.vue'),
+        meta: { title: '变更历史' },
+      },
+      {
         // 文档是接口库的只读出口（可分享给非平台用户）
         path: 'docs',
         name: 'docs',

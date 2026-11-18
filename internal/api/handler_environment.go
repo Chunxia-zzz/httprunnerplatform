@@ -7,10 +7,13 @@ import (
 	"github.com/Chunxia-zzz/httprunnerplatform/pkg/response"
 )
 
-type environmentHandler struct{ svc *service.EnvironmentService }
+type environmentHandler struct {
+	svc  *service.EnvironmentService
+	deps *Deps
+}
 
 func newEnvironmentHandler(deps *Deps) *environmentHandler {
-	return &environmentHandler{svc: deps.Services.Environment}
+	return &environmentHandler{svc: deps.Services.Environment, deps: deps}
 }
 
 // List 返回项目下的环境列表。
@@ -59,6 +62,8 @@ func (h *environmentHandler) Create(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, projectID, service.ChangeCreate, service.EntityEnvironment, e.ID,
+		e.Name, "新建环境「"+e.Name+"」")
 	OK(c, e)
 }
 
@@ -81,6 +86,8 @@ func (h *environmentHandler) Update(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, e.ProjectID, service.ChangeUpdate, service.EntityEnvironment, e.ID,
+		e.Name, "修改环境「"+e.Name+"」")
 	OK(c, e)
 }
 

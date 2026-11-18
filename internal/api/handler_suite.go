@@ -12,10 +12,13 @@ import (
 // 与 userHandler 同一套路：本文件只做参数绑定与响应翻译，
 // 规则（成员唯一、跨项目拒绝、parallel 拒绝、被计划引用时拒绝删除）
 // 全在 service.SuiteService 里，以便被普通单测直接覆盖。
-type suiteHandler struct{ svc *service.SuiteService }
+type suiteHandler struct {
+	svc  *service.SuiteService
+	deps *Deps
+}
 
 func newSuiteHandler(deps *Deps) *suiteHandler {
-	return &suiteHandler{svc: deps.Services.Suite}
+	return &suiteHandler{svc: deps.Services.Suite, deps: deps}
 }
 
 // List 列举项目下的用例集。
@@ -56,6 +59,8 @@ func (h *suiteHandler) Create(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, pid, service.ChangeCreate, service.EntitySuite, su.ID,
+		su.Code, "新建用例集「"+su.Name+"」（"+su.Code+"）")
 	OK(c, su)
 }
 
@@ -89,6 +94,8 @@ func (h *suiteHandler) Update(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, su.ProjectID, service.ChangeUpdate, service.EntitySuite, su.ID,
+		su.Code, "修改用例集「"+su.Name+"」（"+su.Code+"）")
 	OK(c, su)
 }
 
@@ -98,10 +105,17 @@ func (h *suiteHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
+	old, err := h.svc.Get(id)
+	if err != nil {
+		WriteError(c, err)
+		return
+	}
 	if err := h.svc.Delete(id); err != nil {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, old.ProjectID, service.ChangeDelete, service.EntitySuite, old.ID,
+		old.Code, "删除用例集「"+old.Name+"」（"+old.Code+"）")
 	OK(c, nil)
 }
 

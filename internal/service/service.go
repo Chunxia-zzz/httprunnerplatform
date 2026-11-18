@@ -57,6 +57,8 @@ type Set struct {
 	OpenAPI     *OpenAPIService
 	Doc         *DocService
 	Share       *ShareService
+	Member      *MemberService
+	Audit       *AuditService
 }
 
 // New 构造全部 service。
@@ -82,6 +84,8 @@ func New(d Deps) *Set {
 		OpenAPI:     &OpenAPIService{Deps: d},
 		Doc:         &DocService{Deps: d},
 		Share:       &ShareService{Deps: d},
+		Member:      &MemberService{Deps: d},
+		Audit:       &AuditService{Deps: d},
 	}
 }
 

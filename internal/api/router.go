@@ -65,6 +65,9 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// 需登录
 	authed := v1.Group("")
 	authed.Use(middleware.RequireAuth(deps.Sessions))
+	// 项目级访问控制（F8）：非成员访问项目及其资源返回 403。
+	// 放在鉴权之后、业务之前：越权请求不应进入任何 handler。
+	authed.Use(middleware.RequireProjectAccess(deps.Services.Member))
 	{
 		authed.GET("/auth/me", newAuthHandler(deps).Me)
 		authed.POST("/auth/logout", newAuthHandler(deps).Logout)
@@ -89,6 +92,8 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerTokenRoutes(authed, deps)
 		registerMockAdminRoutes(authed, deps)
 		registerDocRoutes(authed, deps)
+		registerMemberRoutes(authed, deps)
+		registerChangeRoutes(authed, deps)
 	}
 
 	// ⭐ CI 入口单独一个前缀：不走会话体系，语义与限流都和页面上的人不同，
@@ -108,6 +113,23 @@ func NewRouter(deps *Deps) *gin.Engine {
 	r.Any("/open/docs/:token", newDocHandler(deps).PublicDoc)
 
 	return r
+}
+
+// registerMemberRoutes 注册项目成员管理（F8）。
+//
+// 读：项目成员都能看名单；写：仅管理员（与「账号由管理员创建」的权限模型一致）。
+func registerMemberRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newMemberHandler(deps)
+	g.GET("/projects/:id/members", h.List)
+	admins := g.Group("/projects/:id/members", middleware.RequireAdmin())
+	admins.POST("", h.Add)
+	admins.DELETE("/:userId", h.Remove)
+}
+
+// registerChangeRoutes 注册变更历史查询（F8）。
+func registerChangeRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newChangeHandler(deps)
+	g.GET("/projects/:id/changes", h.List)
 }
 
 // registerDocRoutes 注册接口文档与分享链接管理（需登录）。

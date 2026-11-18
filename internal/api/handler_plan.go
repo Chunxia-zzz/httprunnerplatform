@@ -11,10 +11,13 @@ import (
 //
 // 与 suiteHandler 同一套路：只做参数绑定与响应翻译，规则
 // （cron 保存时校验、时区合法、成员跨项目拒绝）全在 service.PlanService。
-type planHandler struct{ svc *service.PlanService }
+type planHandler struct {
+	svc  *service.PlanService
+	deps *Deps
+}
 
 func newPlanHandler(deps *Deps) *planHandler {
-	return &planHandler{svc: deps.Services.Plan}
+	return &planHandler{svc: deps.Services.Plan, deps: deps}
 }
 
 // List 列举项目下的测试计划。
@@ -76,6 +79,8 @@ func (h *planHandler) Create(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, pid, service.ChangeCreate, service.EntityPlan, p.ID,
+		p.Name, "新建计划「"+p.Name+"」")
 	OK(c, p)
 }
 
@@ -112,6 +117,8 @@ func (h *planHandler) Update(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, p.ProjectID, service.ChangeUpdate, service.EntityPlan, p.ID,
+		p.Name, "修改计划「"+p.Name+"」")
 	OK(c, p)
 }
 
@@ -121,10 +128,17 @@ func (h *planHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
+	old, err := h.svc.Get(id)
+	if err != nil {
+		WriteError(c, err)
+		return
+	}
 	if err := h.svc.Delete(id); err != nil {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, old.ProjectID, service.ChangeDelete, service.EntityPlan, old.ID,
+		old.Name, "删除计划「"+old.Name+"」")
 	OK(c, nil)
 }
 

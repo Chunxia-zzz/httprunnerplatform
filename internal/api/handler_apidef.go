@@ -8,10 +8,13 @@ import (
 )
 
 // apiDefHandler 是接口定义库（F1）的 HTTP 层。
-type apiDefHandler struct{ svc *service.APIService }
+type apiDefHandler struct {
+	svc  *service.APIService
+	deps *Deps
+}
 
 func newAPIDefHandler(deps *Deps) *apiDefHandler {
-	return &apiDefHandler{svc: deps.Services.API}
+	return &apiDefHandler{svc: deps.Services.API, deps: deps}
 }
 
 // List 返回项目下的接口列表（?module=user 可按服务过滤）。
@@ -72,6 +75,8 @@ func (h *apiDefHandler) Create(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, projectID, service.ChangeCreate, service.EntityAPI, a.ID,
+		a.Code, "新建接口「"+a.Name+"」（"+a.Code+"）")
 	OK(c, a)
 }
 
@@ -91,6 +96,8 @@ func (h *apiDefHandler) Update(c *gin.Context) {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, a.ProjectID, service.ChangeUpdate, service.EntityAPI, a.ID,
+		a.Code, "修改接口「"+a.Name+"」（"+a.Code+"）")
 	OK(c, a)
 }
 
@@ -100,9 +107,16 @@ func (h *apiDefHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
+	old, err := h.svc.Get(id)
+	if err != nil {
+		WriteError(c, err)
+		return
+	}
 	if err := h.svc.Delete(id); err != nil {
 		WriteError(c, err)
 		return
 	}
+	auditChange(c, h.deps, old.ProjectID, service.ChangeDelete, service.EntityAPI, old.ID,
+		old.Code, "删除接口「"+old.Name+"」（"+old.Code+"）")
 	OK(c, nil)
 }

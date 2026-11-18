@@ -131,6 +131,8 @@ export interface Project {
   hrp_version: string
   workspace_path: string
   owner_id: ID
+  /** 已收敛为「仅成员可见」（F8）；false = 尚未设置成员，全员可见 */
+  access_restricted?: boolean
   created_at: string
   updated_at: string
 }
@@ -148,6 +150,28 @@ export interface ProjectReq {
 
 /** 环境的变量表。值一律被后端转成字符串写入 .env。 */
 export type EnvMap = Record<string, unknown>
+
+/** 项目成员（F8）。 */
+export interface ProjectMember {
+  user_id: ID
+  username: string
+  nickname: string
+  role: 'owner' | 'member' | string
+}
+
+/** 一条变更历史（F8）。 */
+export interface ChangeLog {
+  id: ID
+  project_id: ID
+  user_id: ID
+  username: string
+  action: 'create' | 'update' | 'delete' | string
+  entity: 'case' | 'api' | 'environment' | 'suite' | 'plan' | 'dataset' | string
+  entity_id: ID
+  entity_key: string
+  summary: string
+  created_at: string
+}
 
 /** 认证配置（F7）：环境级或步骤级。 */
 export interface AuthConfig {

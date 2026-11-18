@@ -144,6 +144,11 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(model.AllModels()...); err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
+	// 数据回填（幂等）：F8 之前加过成员的项目，收敛标记还没置位。
+	// 不回填的话，这些项目会从「私有」瞬间变回「全员可见」。
+	if err := db.Exec(`UPDATE project SET access_restricted = ? WHERE id IN (SELECT DISTINCT project_id FROM project_member)`, true).Error; err != nil {
+		return fmt.Errorf("回填项目访问模式失败: %w", err)
+	}
 	return nil
 }
 

@@ -364,6 +364,12 @@ type Project struct {
 	WorkspacePath string `gorm:"size:512;not null;default:''" json:"workspace_path"`
 	HrpVersion    string `gorm:"size:32;not null;default:'v4.3.6'" json:"hrp_version"`
 	OwnerID       uint64 `gorm:"not null;default:0" json:"owner_id"`
+	// AccessRestricted 表示项目已收敛为「仅成员可见」（F8）。
+	//
+	// ⭐ 不能靠「成员数是否为 0」判断：移除最后一个成员后，
+	// 项目会瞬间从「私有」退回「全员可见」——这是数据泄漏而不是便利。
+	// 所以第一次添加成员时把开关置 true，之后**永不自动回退**。
+	AccessRestricted bool `gorm:"not null;default:false" json:"access_restricted"`
 	// MockEnabled 是项目级 Mock 开关（F4）。
 	//
 	// ⚠️ 布尔列的 default 必须与 Go 零值（false）一致，否则有害：
@@ -686,6 +692,47 @@ type AssertionResult struct {
 	Msg             string `gorm:"size:512;not null;default:''" json:"msg"`
 }
 
+// ProjectMember 是项目成员（F8）。
+//
+// role 只有 owner / member 两档：项目级细分权限在 30 人团队里收益很低，
+// 但「谁能看这个项目」是刚需。
+type ProjectMember struct {
+	Base
+	ProjectID uint64 `gorm:"not null;uniqueIndex:idx_project_member" json:"project_id"`
+	UserID    uint64 `gorm:"not null;uniqueIndex:idx_project_member" json:"user_id"`
+	Role      string `gorm:"size:16;not null;default:'member'" json:"role"`
+}
+
+// TableName 显式指定表名。
+func (ProjectMember) TableName() string { return "project_member" }
+
+// 项目成员角色。
+const (
+	MemberRoleOwner  = "owner"
+	MemberRoleMember = "member"
+)
+
+// ChangeLog 是一条变更历史（F8）。
+//
+// 只追加、不修改、不删除：审计数据一旦可改就失去意义。
+// Username 冗余存储：用户被删/改名后，历史仍要能读懂。
+type ChangeLog struct {
+	Base
+	ProjectID uint64 `gorm:"not null;index" json:"project_id"`
+	UserID    uint64 `gorm:"not null;default:0" json:"user_id"`
+	Username  string `gorm:"size:64;not null;default:''" json:"username"`
+	// Action：create / update / delete
+	Action string `gorm:"size:16;not null" json:"action"`
+	// Entity：case / api / environment / suite / plan / dataset
+	Entity    string `gorm:"size:16;not null" json:"entity"`
+	EntityID  uint64 `gorm:"not null;default:0" json:"entity_id"`
+	EntityKey string `gorm:"size:128;not null;default:''" json:"entity_key"`
+	Summary   string `gorm:"size:1024;not null;default:''" json:"summary"`
+}
+
+// TableName 显式指定表名。
+func (ChangeLog) TableName() string { return "change_log" }
+
 // ShareLink 是接口文档的只读分享链接（F6）。
 //
 // 与 APIToken 同一条原则：库里只存哈希，明文仅创建时返回一次。
@@ -787,6 +834,8 @@ func AllModels() []any {
 		&AssertionResult{},
 		&APIToken{},
 		&ShareLink{},
+		&ProjectMember{},
+		&ChangeLog{},
 		&NotifyConfig{},
 	}
 }

@@ -25,8 +25,17 @@ type ProjectListQuery struct {
 var projectSubDirs = []string{"api", "testcases", "suites", "data"}
 
 // List 返回项目分页列表。
-func (s *ProjectService) List(q ProjectListQuery, page Page) ([]model.Project, int64, error) {
+// List 返回可见项目。
+//
+// 可见性（F8）：管理员看全部；普通用户看「自己是成员的项目」+
+// 「尚未设置成员的项目」（存量兼容，未设置成员的项目对全员开放）。
+func (s *ProjectService) List(q ProjectListQuery, page Page, viewerID uint64, isAdmin bool) ([]model.Project, int64, error) {
 	tx := s.DB.Model(&model.Project{})
+	if !isAdmin {
+		// 未收敛的项目（还没加过成员）对全员可见；收敛后仅成员可见。
+		tx = tx.Where(`access_restricted = ? OR id IN (SELECT project_id FROM project_member WHERE user_id = ?)`,
+			false, viewerID)
+	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
 		tx = tx.Where("code LIKE ? OR name LIKE ?", like, like)
