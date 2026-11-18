@@ -99,6 +99,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerHealthRoutes(authed, deps)
 		registerFailureRoutes(authed, deps)
 		registerNotifyRoutes(authed, deps)
+		registerDBSourceRoutes(authed, deps)
 	}
 
 	// ⭐ CI 入口单独一个前缀：不走会话体系，语义与限流都和页面上的人不同，
@@ -112,6 +113,15 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// JSON 兜底——返回的就是接口定义里写的响应。
 	mock := r.Group("/mock")
 	registerMockPublicRoutes(mock, deps)
+
+	// db 步骤回环端点（R1）：引擎编译产物会 POST 到这里执行 SQL。
+	// token 校验在 handler（per-run 随机，终态即失效）。
+	// ⭐ 引擎会给 URL 补尾斜杠（实测 A26/A33：/dbstep → /dbstep/），
+	// 两个都注册——漏一个的话 POST 会落进 noRoute 返回 40002，
+	// 且无断言的步骤会"假绿通过"。
+	dbStepH := newDBStepHandler(deps)
+	r.POST("/dbstep", dbStepH.Exec)
+	r.POST("/dbstep/", dbStepH.Exec)
 
 	// 文档只读分享（F6）：与 /open 的 CI 令牌是两套东西，直接挂引擎。
 	// 用 Any 注册再在 handler 里拒绝非 GET —— 保证方法错误时是 405 而不是 404。
@@ -129,6 +139,18 @@ func registerMemberRoutes(g *gin.RouterGroup, deps *Deps) {
 	admins := g.Group("/projects/:id/members", middleware.RequireAdmin())
 	admins.POST("", h.Add)
 	admins.DELETE("/:userId", h.Remove)
+}
+
+// registerDBSourceRoutes 注册数据库连接管理（R1）。
+//
+// 读：项目成员都可见（password 掩码）；写：仅管理员。
+func registerDBSourceRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newDBSourceHandler(deps)
+	g.GET("/projects/:id/dbsources", h.List)
+	admins := g.Group("/projects/:id/dbsources", middleware.RequireAdmin())
+	admins.POST("", h.Create)
+	admins.PUT("/:sourceId", h.Update)
+	admins.DELETE("/:sourceId", h.Delete)
 }
 
 // registerNotifyRoutes 注册通知配置与投递记录（F2）。

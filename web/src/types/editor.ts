@@ -18,8 +18,8 @@ export interface EditorStep {
   seq: number
   name: string
   enabled: boolean
-  /** 步骤类型：request 直接请求 / api 引用接口 / websocket / graphql（F10） */
-  stepType: 'request' | 'api' | 'websocket' | 'graphql'
+  /** 步骤类型：request / api / websocket / graphql（F10）/ db（R1） */
+  stepType: 'request' | 'api' | 'websocket' | 'graphql' | 'db'
   /** stepType=api 时引用的接口定义 ID；否则为 null */
   refApiId: number | null
   method: string
@@ -46,6 +46,10 @@ export interface EditorStep {
   gqlQuery: string
   gqlVariables: string
   gqlOperation: string
+  /** 数据库（R1） */
+  dbSourceName: string
+  dbSQL: string
+  dbParams: string
   /** 步骤级变量 */
   variables: KVRow[]
   extract: ExtractItem[]
@@ -71,6 +75,9 @@ export function newStep(): EditorStep {
     gqlQuery: '',
     gqlVariables: '',
     gqlOperation: '',
+    dbSourceName: '',
+    dbSQL: '',
+    dbParams: '[]',
     refApiId: null,
     method: 'GET',
     url: '/',

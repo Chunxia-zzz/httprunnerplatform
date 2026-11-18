@@ -100,6 +100,7 @@ func (s *ExportService) Export(projectID, envID uint64) ([]byte, string, error) 
 		comp, err := compiler.Render(&compiler.Input{
 			Project:       project,
 			Env:           pickEnv(envs, chosen),
+			LoopbackURL:   loopbackURLFor(s.Cfg),
 			Cases:         []compiler.CaseSpec{{Case: tc, Steps: stepsByCase[tc.ID]}},
 			WorkspaceRoot: projectWS,
 			Datasets:      datasets,

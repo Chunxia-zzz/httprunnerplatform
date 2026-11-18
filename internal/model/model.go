@@ -248,6 +248,7 @@ const (
 	StepThinkTime   = "think_time"
 	StepWebSocket   = "websocket"
 	StepGraphql     = "graphql"
+	StepDB          = "db"
 )
 
 // 提取对象。引擎只支持这 5 类。
@@ -501,6 +502,13 @@ type TestStep struct {
 	GraphqlQuery     string    `gorm:"type:text" json:"graphql_query"`
 	GraphqlVariables jsonx.Any `gorm:"type:text" json:"graphql_variables"`
 	GraphqlOperation string    `gorm:"size:128;not null;default:''" json:"graphql_operation"`
+
+	// DB 步骤（R1）：连接（项目 db_source 的 name）+ SQL + 参数。
+	// 编译产物是「平台回环端点 POST /dbstep」，断言/提取走引擎原生路径
+	// （body.rows / body.affected）——见 specs/015-db-steps/plan.md。
+	DBSourceName string    `gorm:"size:64;not null;default:''" json:"db_source_name"`
+	DBSQL        string    `gorm:"type:text" json:"db_sql"`
+	DBParams     jsonx.Any `gorm:"type:text" json:"db_params"`
 }
 
 // ParamDataset 是参数化数据集（M3 启用）。
@@ -762,7 +770,29 @@ type ShareLink struct {
 func (ShareLink) TableName() string { return "share_link" }
 
 // APIToken 是 CI 令牌。
+// DbSource 是项目级数据库连接配置（R1），db 步骤通过 name 引用。
 //
+// Password 在库内明文存储（展示层掩码、回传 *** 保持原值，与 F7 auth 同语义）；
+// 存储层加密是产品规划 R8 的范围，不混在本期。
+type DbSource struct {
+	Base
+	ProjectID uint64 `gorm:"not null;index" json:"project_id"`
+	// Name 是项目内的引用 key（db 步骤按它连接），唯一。
+	Name     string `gorm:"size:64;not null;default:''" json:"name"`
+	Driver   string `gorm:"size:16;not null;default:''" json:"driver"` // mysql | postgres | sqlite
+	Host     string `gorm:"size:128;not null;default:''" json:"host"`
+	Port     int    `gorm:"not null;default:0" json:"port"`
+	DBName   string `gorm:"size:256;not null;default:''" json:"dbname"`
+	Username string `gorm:"size:64;not null;default:''" json:"username"`
+	Password string `gorm:"size:256;not null;default:''" json:"password"`
+}
+
+// TableName 显式指定表名。
+func (DbSource) TableName() string { return "db_source" }
+
+// DBDrivers 是 R1 支持的数据库类型。
+var DBDrivers = []string{"mysql", "postgres", "sqlite"}
+
 // ⭐ 库里**只存哈希**，不存明文（设计文档决策 4）。
 // 明文在创建时返回一次，之后只能看到 Prefix。忘了就重签 ——
 // 对 CI 而言重签的成本远低于"明文长期躺在库里"。
@@ -865,6 +895,7 @@ func AllModels() []any {
 		&ShareLink{},
 		&NotifyLog{},
 		&ProjectMember{},
+		&DbSource{},
 		&ChangeLog{},
 		&NotifyConfig{},
 	}

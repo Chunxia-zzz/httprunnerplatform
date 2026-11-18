@@ -195,6 +195,10 @@ func (s *DebugService) runSyntheticCase(
 	if err != nil {
 		return nil, err
 	}
+	// db 步骤（R1）：调试与正式执行走同一回环端点，因此也要登记临时通道
+	// 并把 token 写进调试 .env——否则合成用例里的 db 步骤会 401。
+	dbToken, releaseDBToken := s.DBStepTokens.RegisterEphemeral(project.ID)
+	defer releaseDBToken() // 合成用例跑完即关，不留活口
 	comp, err := compiler.Render(&compiler.Input{
 		Project:       project,
 		Env:           env,
@@ -202,6 +206,7 @@ func (s *DebugService) runSyntheticCase(
 		WorkspaceRoot: projectWorkspace(s.Cfg, project),
 		Datasets:      datasets,
 		APIs:          apis,
+		LoopbackURL:   loopbackURLFor(s.Cfg),
 	})
 	if err != nil {
 		return &DebugStepResult{
@@ -229,7 +234,8 @@ func (s *DebugService) runSyntheticCase(
 	if err := os.MkdirAll(ws.TestcasesDir(), 0o755); err != nil {
 		return nil, errInternal("创建调试用例目录失败", err)
 	}
-	if err := os.WriteFile(filepath.Join(ws.Root(), ".env"), []byte(comp.EnvText), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ws.Root(), ".env"),
+		[]byte(comp.EnvText+"dbstep_token="+dbToken+"\n"), 0o644); err != nil {
 		return nil, errInternal("写调试 .env 失败", err)
 	}
 	if err := os.WriteFile(filepath.Join(ws.Root(), filepath.FromSlash(cc.FileName)), []byte(cc.YAML), 0o644); err != nil {

@@ -9,9 +9,10 @@
 /* eslint-disable vue/no-mutating-props */
 // ⬆ 本文件整文件豁免 vue/no-mutating-props：原地改共享 step 对象是上面的
 // 设计决策（嵌套深、逐层 emit 不可维护），父组件 CaseEditorView 持有全部状态。
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
-import { BODY_TYPES, type APIDef } from '@/api'
+import { BODY_TYPES, dbSourceApi, type APIDef, type DbSource } from '@/api'
+import { useProjectStore } from '@/stores/project'
 import AssertEditor from '@/components/AssertEditor.vue'
 import ExtractEditor from '@/components/ExtractEditor.vue'
 import KeyValueEditor from '@/components/KeyValueEditor.vue'
@@ -127,6 +128,41 @@ const gqlVarsError = computed(() => {
   }
 })
 
+// ---- 数据库步骤（R1）----
+const projects = useProjectStore()
+const dbSources = ref<DbSource[]>([])
+const dbLoading = ref(false)
+const dbParamsError = computed(() => {
+  if (props.step.stepType !== 'db' || !props.step.dbParams.trim()) return ''
+  try {
+    const v = JSON.parse(props.step.dbParams)
+    return Array.isArray(v) ? '' : '必须是数组（如 ["a", 1]）'
+  } catch (e) {
+    return e instanceof Error ? e.message : '格式错误'
+  }
+})
+
+onMounted(async () => {
+  if (!projects.currentId) return
+  dbLoading.value = true
+  try {
+    dbSources.value = await dbSourceApi.listDbSources(projects.currentId)
+  } catch {
+    dbSources.value = [] // 环境页没配连接时下拉为空，错误由校验器提示
+  } finally {
+    dbLoading.value = false
+  }
+})
+
+function formatDbParams() {
+  if (!props.step.dbParams.trim()) return
+  try {
+    props.step.dbParams = JSON.stringify(JSON.parse(props.step.dbParams), null, 2)
+  } catch {
+    // 非法时保持原样，错误已在模板展示
+  }
+}
+
 function formatGqlVars() {
   if (!props.step.gqlVariables.trim()) return
   try {
@@ -158,6 +194,7 @@ function formatJson() {
           <el-option label="引用接口" value="api" />
           <el-option label="WebSocket" value="websocket" />
           <el-option label="GraphQL" value="graphql" />
+          <el-option label="数据库" value="db" />
         </el-select>
         <el-switch v-model="step.enabled" active-text="启用" inline-prompt />
         <span v-if="!step.enabled" class="hrp-muted step__off-hint">
@@ -298,6 +335,46 @@ function formatJson() {
           GraphQL 在协议层就是「POST + JSON {query, variables, operationName}」，
           因此编译产物是普通 HTTP 请求：断言、提取、认证、重试全部照常可用（实测 A27）。
         </div>
+      </div>
+    </template>
+
+    <template v-if="step.stepType === 'db'">
+      <div class="db-row">
+        <el-select
+          v-model="step.dbSourceName"
+          class="row__method"
+          placeholder="选择连接"
+          :loading="dbLoading"
+        >
+          <el-option v-for="d in dbSources" :key="d.id" :label="`${d.name}（${d.driver}）`" :value="d.name" />
+        </el-select>
+        <span class="hrp-muted">
+          连接在「环境 → 数据库连接」里管理；SQL 里可写 $变量 与
+          <code v-pre>{{$uuid}}</code> 等动态变量
+        </span>
+      </div>
+      <el-input
+        v-model="step.dbSQL"
+        type="textarea"
+        :rows="6"
+        class="hrp-mono"
+        placeholder="SELECT * FROM orders WHERE id = $order_id"
+      />
+      <div class="gql-row">
+        <el-button size="small" @click="formatDbParams">格式化参数</el-button>
+        <span v-if="dbParamsError" class="body-error">JSON 非法：{{ dbParamsError }}</span>
+        <span v-else class="hrp-muted">参数数组，按 SQL 占位符顺序（MySQL 用 ?；PostgreSQL 建议直接写 $1..$n 并留空参数）</span>
+      </div>
+      <el-input
+        v-model="step.dbParams"
+        type="textarea"
+        :rows="2"
+        class="hrp-mono"
+        placeholder='["参数1", "参数2"]'
+      />
+      <div class="hrp-muted note">
+        执行时本步骤由平台执行 SQL 并返回 <code v-pre>{rows, affected, columns, sql_ms}</code>；
+        断言/提取写 <code v-pre>body.rows[0].列名</code>（查询单行取值）与 <code v-pre>body.affected</code>（写操作行数）。
       </div>
     </template>
 

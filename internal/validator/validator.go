@@ -223,7 +223,7 @@ func validateCase(r *Result, in *Input, spec CaseSpec) {
 	checkStepSeqAndNames(r, steps)
 
 	for _, st := range steps {
-		validateStep(r, in, tc, st, scope)
+		validateStep(r, in, tc, steps, st, scope)
 		// 前序步骤的 extract 结果对后续步骤可见
 		scope.addExtracts(st)
 	}
@@ -260,7 +260,7 @@ func checkStepSeqAndNames(r *Result, steps []model.TestStep) {
 // 步骤级
 // ---------------------------------------------------------------------------
 
-func validateStep(r *Result, in *Input, tc *model.TestCase, st model.TestStep, scope *varScope) {
+func validateStep(r *Result, in *Input, tc *model.TestCase, steps []model.TestStep, st model.TestStep, scope *varScope) {
 	// 步骤局部变量先入作用域（本步骤的请求可以使用它们）
 	stepScope := scope.clone()
 	for k, v := range st.Variables {
@@ -282,6 +282,10 @@ func validateStep(r *Result, in *Input, tc *model.TestCase, st model.TestStep, s
 		validateWebSocketStep(r, st, stepScope, extractNames)
 	case model.StepGraphql:
 		validateGraphqlStep(r, st, stepScope, extractNames)
+	case model.StepDB:
+		validateDBStep(r, st, stepScope, extractNames)
+		// 写操作位置警告（R1）：写库之后没有任何接口步骤 = 造了数却没测
+		validateDBWritePosition(r, steps, st)
 	case model.StepTestCase:
 		// 用例引用尚未开放（F1 只做接口引用）。
 		if st.RefCaseID == 0 {
@@ -380,6 +384,68 @@ func validateWebSocketStep(r *Result, st model.TestStep, scope *varScope, extrac
 }
 
 // validateGraphqlStep 校验 GraphQL 步骤（F10）：本质是一次 POST，必须有查询语句。
+// validateDBStep 校验 db 步骤（R1）：SQL 非空、连接已填、变量引用照常。
+//
+// 连接的存在性在用例保存侧已查（validateDBSources）；这里兜底空值并检查
+// 变量引用（SQL 里的 $var 与 params 里的引用）。
+func validateDBStep(r *Result, st model.TestStep, scope *varScope, extractNames map[string]bool) {
+	if strings.TrimSpace(st.DBSourceName) == "" {
+		r.errf(ScopeStep, st.Seq, "db_source_name", CodeUnresolvedRef,
+			"在环境页「数据库连接」里创建一个连接，再回到这里选择",
+			"步骤「%s」声明为数据库步骤，但未选择连接", st.Name)
+	}
+	if strings.TrimSpace(st.DBSQL) == "" {
+		r.errf(ScopeStep, st.Seq, "db_sql", CodeBadStepConfig,
+			"填写要执行的 SQL（SELECT / INSERT / UPDATE / DELETE）",
+			"步骤「%s」的 SQL 不能为空", st.Name)
+	}
+	checkRefsIn(r, ScopeStep, st.Seq, "db.sql", st.DBSQL, scope)
+	checkRefsIn(r, ScopeStep, st.Seq, "db.params", st.DBParams.Val, scope)
+	validateExtractAndAssert(r, st, scope, extractNames)
+}
+
+// validateDBWritePosition 对「写库步骤后没有任何接口步骤」给 warning（旁路不阻断）：
+// 造了数却没测，通常是步骤顺序排错了。
+func validateDBWritePosition(r *Result, steps []model.TestStep, st model.TestStep) {
+	head := strings.ToUpper(strings.TrimSpace(st.DBSQL))
+	// 去掉前导注释行后再判断
+	for {
+		trimmed := strings.TrimLeft(head, " \t\n")
+		if strings.HasPrefix(trimmed, "--") || strings.HasPrefix(trimmed, "#") {
+			if idx := strings.IndexByte(trimmed, '\n'); idx >= 0 {
+				head = trimmed[idx+1:]
+				continue
+			}
+		}
+		if strings.HasPrefix(trimmed, "/*") {
+			if idx := strings.Index(trimmed, "*/"); idx >= 0 && idx+2 <= len(trimmed) {
+				head = trimmed[idx+2:]
+				continue
+			}
+		}
+		head = trimmed
+		break
+	}
+	isWrite := strings.HasPrefix(head, "INSERT") || strings.HasPrefix(head, "UPDATE") ||
+		strings.HasPrefix(head, "DELETE") || strings.HasPrefix(head, "ALTER") ||
+		strings.HasPrefix(head, "DROP") || strings.HasPrefix(head, "TRUNCATE")
+	if !isWrite {
+		return
+	}
+	for _, later := range steps {
+		if later.Seq <= st.Seq || !later.Enabled {
+			continue
+		}
+		if later.StepType == model.StepRequest || later.StepType == "" ||
+			later.StepType == model.StepAPI || later.StepType == model.StepGraphql {
+			return // 后面还有接口动作，顺序合理
+		}
+	}
+	r.warnf(ScopeStep, st.Seq, "db_sql", CodeBadStepConfig,
+		"写库步骤之后没有任何接口调用——通常应该先写库、再调接口、最后查库断言",
+		"步骤「%s」执行写库操作，但之后没有接口步骤", st.Name)
+}
+
 func validateGraphqlStep(r *Result, st model.TestStep, scope *varScope, extractNames map[string]bool) {
 	req, err := decodeRequest(st.Request)
 	if err != nil {

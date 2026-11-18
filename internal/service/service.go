@@ -38,6 +38,8 @@ type Deps struct {
 	Events *EventHub
 	// Notifier 用于执行结束后的群机器人推送（F2）。
 	Notifier *NotifyService
+	// DBStepTokens 是 db 步骤回环通道注册表（R1）。run 与调试共用同一实例。
+	DBStepTokens *dbstepRegistry
 }
 
 // Set 汇总全部 service，供上层一次性注入与优雅关闭。
@@ -68,7 +70,13 @@ type Set struct {
 	Perf    *PerfService
 	Health  *HealthService
 	Failure *FailureClusterService
-	Notify  *NotifyService
+	// DBSource 是项目级数据库连接（R1）
+	DBSource *DbSourceService
+	// DBStep 负责 db 步骤 SQL 执行与回环 token 注册（R1）
+	DBStep *DBStepService
+	// DBStepTokens 与 Deps.DBStepTokens 是同一实例（回环 handler 需要）
+	DBStepTokens *dbstepRegistry
+	Notify       *NotifyService
 }
 
 // New 构造全部 service。
@@ -78,37 +86,44 @@ func New(d Deps) *Set {
 	if d.Events == nil {
 		d.Events = NewEventHub()
 	}
+	// db 步骤回环通道：与 Events 同理，进程内单例，服务与回环 handler 共享。
+	if d.DBStepTokens == nil {
+		d.DBStepTokens = newDBStepRegistry()
+	}
 	// RunService 通过 Deps.Notifier 在终态派发通知，因此必须先构造好再传 d。
 	notifier := &NotifyService{Deps: d}
 	d.Notifier = notifier
 	caseSvc := &CaseService{Deps: d}
 	return &Set{
-		Project:     &ProjectService{Deps: d},
-		Environment: &EnvironmentService{Deps: d},
-		Case:        caseSvc,
-		Suite:       &SuiteService{Deps: d},
-		Plan:        &PlanService{Deps: d},
-		Token:       &TokenService{Deps: d},
-		Run:         NewRunService(d),
-		Debug:       &DebugService{Deps: d},
-		Param:       &ParamService{Deps: d},
-		User:        &UserService{Deps: d},
-		Stats:       NewStatsService(d),
-		Import:      NewImportService(d, caseSvc),
-		Export:      NewExportService(d),
-		Baseline:    NewBaselineService(d),
-		API:         &APIService{Deps: d},
-		Mock:        &MockService{Deps: d, hits: map[uint64][]MockHit{}},
-		OpenAPI:     &OpenAPIService{Deps: d},
-		Doc:         &DocService{Deps: d},
-		Share:       &ShareService{Deps: d},
-		Member:      &MemberService{Deps: d},
-		Events:      d.Events,
-		Audit:       &AuditService{Deps: d},
-		Perf:        &PerfService{Deps: d},
-		Health:      &HealthService{Deps: d},
-		Failure:     &FailureClusterService{Deps: d},
-		Notify:      notifier,
+		Project:      &ProjectService{Deps: d},
+		Environment:  &EnvironmentService{Deps: d},
+		Case:         caseSvc,
+		Suite:        &SuiteService{Deps: d},
+		Plan:         &PlanService{Deps: d},
+		Token:        &TokenService{Deps: d},
+		Run:          NewRunService(d),
+		Debug:        &DebugService{Deps: d},
+		Param:        &ParamService{Deps: d},
+		User:         &UserService{Deps: d},
+		Stats:        NewStatsService(d),
+		Import:       NewImportService(d, caseSvc),
+		Export:       NewExportService(d),
+		Baseline:     NewBaselineService(d),
+		API:          &APIService{Deps: d},
+		Mock:         &MockService{Deps: d, hits: map[uint64][]MockHit{}},
+		OpenAPI:      &OpenAPIService{Deps: d},
+		Doc:          &DocService{Deps: d},
+		Share:        &ShareService{Deps: d},
+		Member:       &MemberService{Deps: d},
+		Events:       d.Events,
+		Audit:        &AuditService{Deps: d},
+		Perf:         &PerfService{Deps: d},
+		Health:       &HealthService{Deps: d},
+		DBSource:     &DbSourceService{Deps: d},
+		DBStep:       &DBStepService{Deps: d},
+		DBStepTokens: d.DBStepTokens,
+		Failure:      &FailureClusterService{Deps: d},
+		Notify:       notifier,
 	}
 }
 

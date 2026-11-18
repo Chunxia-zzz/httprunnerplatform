@@ -23,6 +23,7 @@ export * as perfApi from './perf'
 export * as healthApi from './health'
 export * as failureApi from './failures'
 export * as notifyApi from './notify'
+export * as dbSourceApi from './dbsource'
 export * as baselineApi from './baseline'
 
 // ---------------------------------------------------------------------------

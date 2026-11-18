@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/compiler"
+	"github.com/Chunxia-zzz/httprunnerplatform/internal/config"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/decompiler"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/validator"
@@ -207,6 +209,11 @@ type StepReq struct {
 	GraphqlQuery     string    `json:"graphql_query"`
 	GraphqlVariables jsonx.Any `json:"graphql_variables"`
 	GraphqlOperation string    `json:"graphql_operation"`
+
+	// DB（R1）：连接（项目 db_source 的 name）+ SQL + 参数
+	DBSourceName string    `json:"db_source_name"`
+	DBSQL        string    `json:"db_sql"`
+	DBParams     jsonx.Any `json:"db_params"`
 }
 
 // CaseReq 是创建/更新用例的请求（PUT 为全量覆盖）。
@@ -407,6 +414,7 @@ func (s *CaseService) RenderYAML(id, envID uint64) (*YAMLPreview, error) {
 	}
 	out, err := compiler.Render(&compiler.Input{
 		Project:       project,
+		LoopbackURL:   loopbackURLFor(s.Cfg),
 		Env:           env,
 		Cases:         []compiler.CaseSpec{{Case: tc, Steps: steps}},
 		WorkspaceRoot: projectWorkspace(s.Cfg, project),
@@ -508,6 +516,7 @@ func (s *CaseService) Validate(id, envID uint64) (*ValidateOutcome, error) {
 	}
 	comp, err := compiler.Render(&compiler.Input{
 		Project:       project,
+		LoopbackURL:   loopbackURLFor(s.Cfg),
 		Env:           env,
 		Cases:         []compiler.CaseSpec{{Case: tc, Steps: steps}},
 		WorkspaceRoot: projectWorkspace(s.Cfg, project),
@@ -671,6 +680,49 @@ func (s *CaseService) validateAPIRefs(projectID uint64, steps []StepReq) error {
 	return nil
 }
 
+// validateDBSources 校验 db 步骤的连接引用：存在且属于本项目（R1）。
+func (s *CaseService) validateDBSources(projectID uint64, steps []StepReq) error {
+	names := make(map[string]bool)
+	for _, st := range steps {
+		if normalizeStepType(st.StepType) != model.StepDB {
+			continue
+		}
+		name := strings.TrimSpace(st.DBSourceName)
+		if name == "" {
+			return errBadParam("步骤 %q 声明为数据库步骤，但未选择连接", strings.TrimSpace(st.Name))
+		}
+		if strings.TrimSpace(st.DBSQL) == "" {
+			return errBadParam("步骤 %q 的 SQL 不能为空", strings.TrimSpace(st.Name))
+		}
+		names[name] = true
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	var found []model.DbSource
+	if err := s.DB.Where("project_id = ? AND name IN ?", projectID, mapKeys(names)).Find(&found).Error; err != nil {
+		return errInternal("查询数据库连接失败", err)
+	}
+	ok := make(map[string]bool, len(found))
+	for _, m := range found {
+		ok[m.Name] = true
+	}
+	for name := range names {
+		if !ok[name] {
+			return errBadParam("数据库连接 %q 不存在或不属于本项目，请先在环境页创建", name)
+		}
+	}
+	return nil
+}
+
+func mapKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
 // buildSteps 把请求步骤转成模型步骤，并归一化 seq。
 //
 // seq 归一化策略：按请求给出的 seq 稳定排序后**重编号为 1..n**。
@@ -685,6 +737,11 @@ func (s *CaseService) buildSteps(projectID uint64, in []StepReq) ([]model.TestSt
 	// 接口引用（F1）在保存侧就校验存在性与项目归属：
 	// 不留到编译期才发现「引用了别的项目的接口」。
 	if err := s.validateAPIRefs(projectID, in); err != nil {
+		return nil, err
+	}
+
+	// db 连接引用（R1）：与接口引用同一原则，保存侧就拦住跨项目/不存在的连接。
+	if err := s.validateDBSources(projectID, in); err != nil {
 		return nil, err
 	}
 
@@ -734,6 +791,9 @@ func toTestStep(req StepReq, seq int) model.TestStep {
 		GraphqlQuery:     req.GraphqlQuery,
 		GraphqlVariables: req.GraphqlVariables,
 		GraphqlOperation: strings.TrimSpace(req.GraphqlOperation),
+		DBSourceName:     strings.TrimSpace(req.DBSourceName),
+		DBSQL:            strings.TrimSpace(req.DBSQL),
+		DBParams:         req.DBParams,
 	}
 	if req.Enabled != nil {
 		st.Enabled = *req.Enabled
@@ -789,4 +849,9 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// loopbackURLFor 平台回环地址（R1）：db 步骤编译产物指向平台自身。
+func loopbackURLFor(cfg *config.Config) string {
+	return fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
 }

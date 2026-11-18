@@ -122,6 +122,15 @@ func buildSteps(in Input, events []*stepEvent, pairs []stdoutPair, doc *summaryD
 			oc.ErrorMsg = ev.Error
 			// 引擎给出的断言明细（仅"通过"路径存在）
 			oc.Assertions = assertionFromLogLines(ev.Validations)
+			// ⭐ 兜底（A33 变体）：步骤 fail 但引擎一条断言明细都没给——
+			// panic 发生在 validations 打印之前（如 5xx 触发的 status_code 断言）。
+			// 同样用声明重建，不留下"fail 却不知道哪条断言失败"的盲盒。
+			if oc.Status == model.StatusFail && len(oc.Assertions) == 0 && len(decl.Assertions) > 0 {
+				oc.Assertions = rebuildAssertions(decl.Assertions, nil)
+				for i := range oc.Assertions {
+					oc.Assertions[i].Rebuilt = true
+				}
+			}
 		} else {
 			// ⭐ 启动了但没有配对 end ⇒ 引擎在这一步中断（F8）
 			oc.InferredFailed = true

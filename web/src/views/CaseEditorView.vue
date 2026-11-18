@@ -202,6 +202,12 @@ function toEditorStep(s: CaseDetail['steps'][number]): EditorStep {
   step.gqlVariables =
     s.graphql_variables == null ? '' : JSON.stringify(s.graphql_variables, null, 2)
   step.gqlOperation = s.graphql_operation ?? ''
+  step.dbSourceName = s.db_source_name ?? ''
+  step.dbSQL = s.db_sql ?? ''
+  step.dbParams =
+    s.db_params == null
+      ? '[]'
+      : JSON.stringify(s.db_params, null, 2)
   step.method = (req.method || 'GET').toUpperCase()
   step.url = req.url || ''
   step.headers = mapToRows(req.headers)
@@ -329,6 +335,9 @@ function toStepReq(s: EditorStep): StepReq {
         ? (JSON.parse(s.gqlVariables) as unknown)
         : null,
     graphql_operation: s.stepType === 'graphql' ? s.gqlOperation.trim() : '',
+    db_source_name: s.stepType === 'db' ? s.dbSourceName : '',
+    db_sql: s.stepType === 'db' ? s.dbSQL : '',
+    db_params: s.stepType === 'db' && s.dbParams.trim() ? (JSON.parse(s.dbParams) as unknown) : null,
     request: isApi ? null : (req as StepReq['request']),
     variables: rowsToMap(s.variables),
     extract: s.extract.filter((e) => e.name.trim() !== '' || e.expression.trim() !== ''),

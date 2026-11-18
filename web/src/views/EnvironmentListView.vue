@@ -13,7 +13,18 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessageBox, type FormInstance } from 'element-plus'
 
-import { type AuthConfig, environmentApi, MASKED_VALUE, type Environment, type EnvMap, type EnvironmentReq } from '@/api'
+import {
+  type AuthConfig,
+  dbSourceApi,
+  MASKED_VALUE,
+  type DbSource,
+  type DbSourceReq,
+  environmentApi,
+  type Environment,
+  type EnvMap,
+  type EnvironmentReq,
+  type ID,
+} from '@/api'
 import KeyValueEditor from '@/components/KeyValueEditor.vue'
 import { useProjectStore } from '@/stores/project'
 import { mapToRows, rowsToMap, type KVRow } from '@/utils/format'
@@ -173,6 +184,75 @@ function envCount(m: EnvMap | null): number {
 }
 
 onMounted(load)
+
+// ---- 数据库连接（R1）----
+const dbList = ref<DbSource[]>([])
+const dbLoading = ref(false)
+const dbVisible = ref(false)
+const dbEditingId = ref<ID | null>(null)
+const dbForm = ref<DbSourceReq>({ name: '', driver: 'sqlite', host: '', port: 0, dbname: '', username: '', password: '' })
+const dbSaving = ref(false)
+
+async function loadDbs() {
+  if (!projects.currentId) return
+  dbLoading.value = true
+  try {
+    dbList.value = await dbSourceApi.listDbSources(projects.currentId)
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    dbLoading.value = false
+  }
+}
+
+function openDbCreate() {
+  dbEditingId.value = null
+  dbForm.value = { name: '', driver: 'sqlite', host: '', port: 0, dbname: '', username: '', password: '' }
+  dbVisible.value = true
+}
+
+function openDbEdit(row: unknown) {
+  const d = row as DbSource
+  dbEditingId.value = d.id
+  dbForm.value = { name: d.name, driver: d.driver, host: d.host, port: d.port, dbname: d.dbname, username: d.username, password: '***' }
+  dbVisible.value = true
+}
+
+async function saveDb() {
+  dbSaving.value = true
+  try {
+    if (dbEditingId.value) {
+      await dbSourceApi.updateDbSource(dbEditingId.value, dbForm.value)
+    } else {
+      await dbSourceApi.createDbSource(projects.currentId!, dbForm.value)
+    }
+    notifyOk('连接已保存')
+    dbVisible.value = false
+    await loadDbs()
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    dbSaving.value = false
+  }
+}
+
+async function removeDb(row: unknown) {
+  const d = row as DbSource
+  try {
+    await ElMessageBox.confirm(`删除连接「${d.name}」？被 db 步骤引用的连接无法删除。`, '删除连接', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    await dbSourceApi.deleteDbSource(projects.currentId!, d.id)
+    notifyOk('已删除')
+    await loadDbs()
+  } catch (e) {
+    notifyError(e)
+  }
+}
+
+onMounted(() => { void loadDbs() })
 watch(projectId, () => {
   void load()
 })
@@ -187,7 +267,39 @@ watch(projectId, () => {
           环境渲染为工作区根目录的 <span class="hrp-mono">.env</span>；用例里的
           <span class="hrp-mono">$base_url</span> 等变量都来自这里。
         </p>
-      </div>
+        <el-card shadow="never" class="db-card">
+      <template #header>
+        <div class="db-card__head">
+          <span>数据库连接（db 步骤用）</span>
+          <el-button type="primary" size="small" @click="openDbCreate">新建连接</el-button>
+        </div>
+      </template>
+      <el-table v-loading="dbLoading" :data="dbList" border stripe size="small">
+        <el-table-column prop="name" label="名称" min-width="120" />
+        <el-table-column label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain">{{ row.driver }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="地址" min-width="220">
+          <template #default="{ row }">
+            <span v-if="row.driver === 'sqlite'" class="hrp-mono">{{ row.dbname }}</span>
+            <span v-else class="hrp-mono">{{ row.host }}:{{ row.port }}/{{ row.dbname }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="username" label="用户" width="120" />
+        <el-table-column label="操作" width="130">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDbEdit(row)">编辑</el-button>
+            <el-button link type="danger" @click="removeDb(row)">删除</el-button>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <p class="hrp-muted">还没有数据库连接；db 步骤会引用这里的连接。</p>
+        </template>
+      </el-table>
+    </el-card>
+  </div>
       <el-button type="primary" :disabled="!projectId" @click="openCreate">
         <el-icon><Plus /></el-icon>新建环境
       </el-button>
@@ -325,10 +437,56 @@ watch(projectId, () => {
         <el-button type="primary" :loading="submitting" @click="submit">保存</el-button>
       </template>
     </el-dialog>
+    <el-dialog v-model="dbVisible" :title="dbEditingId ? '编辑数据库连接' : '新建数据库连接'" width="560px" destroy-on-close>
+      <el-form label-width="90px">
+        <el-form-item label="名称" required>
+          <el-input v-model="dbForm.name" placeholder="如 paydb（db 步骤按它引用，保存后不可改）" />
+        </el-form-item>
+        <el-form-item label="类型" required>
+          <el-select v-model="dbForm.driver" style="width: 200px">
+            <el-option label="MySQL" value="mysql" />
+            <el-option label="PostgreSQL" value="postgres" />
+            <el-option label="SQLite（文件）" value="sqlite" />
+          </el-select>
+        </el-form-item>
+        <template v-if="dbForm.driver !== 'sqlite'">
+          <el-form-item label="主机" required>
+            <el-input v-model="dbForm.host" placeholder="127.0.0.1" />
+          </el-form-item>
+          <el-form-item label="端口" required>
+            <el-input-number v-model="dbForm.port" :min="1" :max="65535" />
+          </el-form-item>
+        </template>
+        <el-form-item :label="dbForm.driver === 'sqlite' ? '文件路径' : '数据库'" required>
+          <el-input v-model="dbForm.dbname" :placeholder="dbForm.driver === 'sqlite' ? '/data/test.db' : '库名'" />
+        </el-form-item>
+        <template v-if="dbForm.driver !== 'sqlite'">
+          <el-form-item label="用户名">
+            <el-input v-model="dbForm.username" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="dbForm.password" show-password placeholder="编辑时传 *** 表示保持原值" />
+          </el-form-item>
+        </template>
+      </el-form>
+      <template #footer>
+        <el-button @click="dbVisible = false">取消</el-button>
+        <el-button type="primary" :loading="dbSaving" @click="saveDb">保存</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
 <style scoped>
+.db-card {
+  margin-top: 16px;
+}
+.db-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 .auth-box {
   width: 100%;
 }

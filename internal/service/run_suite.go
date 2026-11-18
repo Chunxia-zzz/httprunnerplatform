@@ -282,6 +282,8 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 	}
 	plans := make([]planned, 0, len(job.specs))
 	compileErrors := make([]suiteOutcome, 0)
+	// db 步骤回环通道（R1）：整个 run 一个 token（各用例共用同一份 .env）。
+	dbToken := s.DBStepTokens.Register(job.runID, job.project.ID)
 	for _, spec := range job.specs {
 		comp, err := compiler.Compile(&compiler.Input{
 			Project:       job.project,
@@ -290,6 +292,7 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 			WorkspaceRoot: projectWS,
 			Datasets:      datasets,
 			APIs:          apis,
+			LoopbackURL:   s.loopbackURL(),
 		}, projectWS)
 		if err != nil {
 			compileErrors = append(compileErrors, suiteOutcome{
@@ -311,6 +314,11 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 	}
 	if err := ws.CopyFrom(projectWS); err != nil {
 		s.finishSuite(job, nil, model.RunError, "复制工作区失败："+err.Error(), started, len(job.specs))
+		return
+	}
+	// ⭐ token 必须在 CopyFrom 之后写：CopyFrom 会用项目工作区的 .env 覆盖整个文件
+	if err := appendRunEnv(ws.Root(), map[string]string{"dbstep_token": dbToken}); err != nil {
+		s.finishSuite(job, nil, model.RunError, "写入 dbstep token 失败："+err.Error(), started, len(job.specs))
 		return
 	}
 	if err := ws.PrepareForCase(); err != nil {

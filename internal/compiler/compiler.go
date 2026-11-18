@@ -18,6 +18,7 @@ package compiler
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -58,6 +59,10 @@ type Input struct {
 	// 由调用方（service 层）在编译前一次性查好传入：compiler 是纯函数包，
 	// 不查库。引用了不存在的数据集时渲染会直接报错（resolveParameters）。
 	Datasets map[string]*model.ParamDataset
+	// LoopbackURL 是平台回环地址（R1 db 步骤）：形如 http://127.0.0.1:8127。
+	// db 步骤编译为对 {LoopbackURL}/dbstep 的 POST；空值时 db 步骤直接报
+	// 「平台未提供回环地址」——不猜端口。
+	LoopbackURL string
 	// APIs 是本项目全部接口定义，按 ID 索引（F1 接口引用）。
 	//
 	// 与 Datasets 同理：service 层查好传入，compiler 不查库。
@@ -314,6 +319,16 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 		Variables: st.Variables,
 	}
 
+	// ⭐ db 步骤自动注入 status_code 断言（实测 A33）：引擎的步骤成功判定
+	// 只看「请求是否发出」，HTTP 500 也会 pass —— SQL 失败不注入这条断言
+	// 就是假绿。必须在 decl 构造前注入（decl.Assertions 是 fail 步骤重建明细的数据源）。
+	// 用户显式写过 status_code 断言时不重复注入。
+	if st.StepType == model.StepDB && !hasStatusCodeAssert(st.Validate) {
+		st.Validate = append(st.Validate, model.AssertItem{
+			Check: "status_code", Assert: "eq", Expect: 200,
+		})
+	}
+
 	decl := StepDecl{
 		Seq:        st.Seq,
 		Name:       name,
@@ -400,6 +415,34 @@ func renderStep(in *Input, st model.TestStep, caseHeaders map[string]any, ordina
 			return ys, decl, err
 		}
 		decl.StepType = model.StepGraphql
+
+	case model.StepDB:
+		// DB 步骤（R1）：编译为「平台回环端点 POST /dbstep」的普通 HTTP 步骤。
+		// SQL 执行由平台完成（database/sql），断言/提取由引擎原生完成——
+		// 归因、对账、假绿防护全部继承，见 specs/015-db-steps/plan.md。
+		if in.LoopbackURL == "" {
+			return ys, decl, fmt.Errorf("平台未提供回环地址（LoopbackURL 为空），无法编译 db 步骤")
+		}
+		body := map[string]any{
+			"conn": st.DBSourceName,
+			"sql":  st.DBSQL,
+		}
+		if params := dbParamsOf(st.DBParams); len(params) > 0 {
+			body["params"] = params
+		}
+		// SQL 里的平台变量照常替换（如 WHERE id=$order_id）；POSTGRES $1 占位符
+		// 与变量语法同形——用户应改用具名参数 params（文档已注明），不强行转义。
+		req := model.RequestSpec{
+			Method:   "POST",
+			URL:      in.LoopbackURL + "/dbstep",
+			BodyType: model.BodyTypeJSON,
+			Headers:  map[string]any{"X-Dbstep-Token": "$dbstep_token"},
+		}
+		req.Body = jsonx.Any{Val: body}
+		if err := renderRequestInto(&ys, &decl, req, merged, authHeaders, authParams); err != nil {
+			return ys, decl, err
+		}
+		decl.StepType = model.StepDB
 
 	case model.StepTestCase:
 		// 用例引用尚未开放（F1 只做接口引用，用例引用属后续里程碑）。
@@ -829,6 +872,35 @@ func hasHeader(h map[string]any, name string) bool {
 // escapeDollar 把 `$` 转义成 `$$`（引擎的转义语法，实测 A28）。
 func escapeDollar(s string) string {
 	return strings.ReplaceAll(s, "$", "$$")
+}
+
+// hasStatusCodeAssert 判断断言列表里是否已有 status_code 检查。
+func hasStatusCodeAssert(list jsonx.Slice[model.AssertItem]) bool {
+	for _, a := range list {
+		if strings.EqualFold(strings.TrimSpace(a.Check), "status_code") {
+			return true
+		}
+	}
+	return false
+}
+
+// dbParamsOf 把步骤的 db_params JSON 列解析成参数数组。
+func dbParamsOf(raw jsonx.Any) []any {
+	if raw.Val == nil {
+		return nil
+	}
+	switch t := raw.Val.(type) {
+	case []any:
+		return t
+	default:
+		var out []any
+		b, err := json.Marshal(t)
+		if err != nil {
+			return nil
+		}
+		_ = json.Unmarshal(b, &out)
+		return out
+	}
 }
 
 // renderWebSocket 把 WS 步骤渲染成引擎的 websocket 段（F10 / 实测 A26）。

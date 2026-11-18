@@ -184,6 +184,37 @@ export interface NotifySendResult {
   error: string
 }
 
+/** 数据库连接（R1）：项目级，db 步骤按 name 引用。 */
+export interface DbSource {
+  id: ID
+  name: string
+  driver: 'mysql' | 'postgres' | 'sqlite' | string
+  host: string
+  port: number
+  dbname: string
+  username: string
+  /** 列表/详情里都是掩码（空连接为空串）；提交 *** 表示保持原值 */
+  password: string
+}
+
+export interface DbSourceReq {
+  name: string
+  driver: string
+  host: string
+  port: number
+  dbname: string
+  username: string
+  password: string
+}
+
+/** db 步骤回环端点的响应（断言/提取基于 body.rows / body.affected）。 */
+export interface DBStepResult {
+  columns?: string[]
+  rows?: Record<string, unknown>[]
+  affected?: number
+  sql_ms?: number
+}
+
 /** 失败聚类（F13）。 */
 export interface FailureCaseItem {
   case_id: ID
@@ -469,6 +500,9 @@ export interface TestStep {
   graphql_query: string
   graphql_variables: unknown | null
   graphql_operation: string
+  db_source_name: string
+  db_sql: string
+  db_params: unknown | null
   created_at: string
   updated_at: string
 }
@@ -494,6 +528,9 @@ export interface StepReq {
   graphql_query?: string
   graphql_variables?: unknown | null
   graphql_operation?: string
+  db_source_name?: string
+  db_sql?: string
+  db_params?: unknown | null
 }
 
 export interface CaseConfig {

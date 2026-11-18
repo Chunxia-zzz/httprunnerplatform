@@ -139,6 +139,11 @@ func (s *RunService) publishStatus(runID uint64, status string, total int, finis
 	if finished && s.Notifier != nil {
 		go s.Notifier.DispatchRun(runID, status)
 	}
+
+	// db 步骤回环通道（R1）随终态关闭：SQL 入口只在执行存活期开放。
+	if finished && s.DBStepTokens != nil {
+		s.DBStepTokens.Close(runID)
+	}
 }
 
 // publishCase 推送用例集里单条用例的结果。

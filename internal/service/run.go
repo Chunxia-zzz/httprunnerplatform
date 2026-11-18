@@ -266,6 +266,9 @@ func (s *RunService) execute(ctx context.Context, job *runJob) {
 		s.finish(job, err.Error(), model.RunError, started)
 		return
 	}
+	// db 步骤回环通道（R1）：每个 run 一个 token，写入该 run 的 .env；
+	// 编译产物里的请求头引用 $dbstep_token，由引擎在运行时替换。
+	dbToken := s.DBStepTokens.Register(job.runID, job.project.ID)
 	comp, err := compiler.Compile(&compiler.Input{
 		Project:       job.project,
 		Env:           job.env,
@@ -273,6 +276,7 @@ func (s *RunService) execute(ctx context.Context, job *runJob) {
 		WorkspaceRoot: projectWS,
 		Datasets:      datasets,
 		APIs:          apis,
+		LoopbackURL:   s.loopbackURL(),
 	}, projectWS)
 	if err != nil {
 		s.finish(job, "编译失败："+err.Error(), model.RunError, started)
@@ -289,6 +293,10 @@ func (s *RunService) execute(ctx context.Context, job *runJob) {
 	}
 	if err := ws.CopyFrom(projectWS); err != nil {
 		s.finish(job, "复制工作区失败："+err.Error(), model.RunError, started)
+		return
+	}
+	if err := appendRunEnv(ws.Root(), map[string]string{"dbstep_token": dbToken}); err != nil {
+		s.finish(job, "写入 dbstep token 失败："+err.Error(), model.RunError, started)
 		return
 	}
 	if err := ws.PrepareForCase(); err != nil {
@@ -532,6 +540,12 @@ func (s *RunService) persist(job *runJob, cc compiler.CompiledCase, res *parser.
 // 这类失败没有解析结果可用，因此直接把原因写进 error_msg。
 // total 记 0 而不是 1：一条用例都没跑起来是事实，
 // actual_case_count = 0 与 expected = 1 之间的差额由 count_mismatch 表达。
+// loopbackURL 平台回环地址（R1）：引擎与平台同机，db 步骤经 127.0.0.1 回环。
+func (s *RunService) loopbackURL() string {
+	return loopbackURLFor(s.Cfg)
+}
+
+// finish 是单用例执行的统一收尾（成功/失败/错误）。
 func (s *RunService) finish(job *runJob, msg, status string, started time.Time) {
 	updates := map[string]any{
 		"status":              status,
@@ -1166,4 +1180,29 @@ func clip(s string, n int) string {
 		return s
 	}
 	return string(r[:n])
+}
+
+// appendRunEnv 向 run 工作区的 .env 追加键值（R1 dbstep token 等）。
+// 键已存在时覆盖（dotenv 后者生效？——hrp 的 .env 不保证，所以先按行替换）。
+func appendRunEnv(root string, kv map[string]string) error {
+	p := filepath.Join(root, ".env")
+	var lines []string
+	if b, err := os.ReadFile(p); err == nil {
+		lines = strings.Split(string(b), "\n")
+	}
+	for k, v := range kv {
+		found := false
+		for i, line := range lines {
+			if strings.HasPrefix(strings.TrimSpace(line), k+"=") {
+				lines[i] = k + "=" + v
+				found = true
+				break
+			}
+		}
+		if !found {
+			lines = append(lines, k+"="+v)
+		}
+	}
+	out := strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\n"
+	return os.WriteFile(p, []byte(out), 0o644)
 }
