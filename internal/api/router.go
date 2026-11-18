@@ -94,6 +94,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerDocRoutes(authed, deps)
 		registerMemberRoutes(authed, deps)
 		registerChangeRoutes(authed, deps)
+		registerWSRoutes(authed, deps)
 	}
 
 	// ⭐ CI 入口单独一个前缀：不走会话体系，语义与限流都和页面上的人不同，
@@ -124,6 +125,15 @@ func registerMemberRoutes(g *gin.RouterGroup, deps *Deps) {
 	admins := g.Group("/projects/:id/members", middleware.RequireAdmin())
 	admins.POST("", h.Add)
 	admins.DELETE("/:userId", h.Remove)
+}
+
+// registerWSRoutes 注册执行进度推送（F9）。
+//
+// 走会话鉴权（浏览器 WS 握手会带同源 cookie），因此挂在 authed 分组内；
+// 权限在 handler 里按「该执行所属项目」显式校验（ProjectGuard 只认 REST 路径）。
+func registerWSRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newWSHandler(deps)
+	g.GET("/ws/runs/:id", h.RunEvents)
 }
 
 // registerChangeRoutes 注册变更历史查询（F8）。

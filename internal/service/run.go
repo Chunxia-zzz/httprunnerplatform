@@ -239,6 +239,8 @@ func (s *RunService) execute(ctx context.Context, job *runJob) {
 		"started_at": &started,
 	}); err != nil {
 		logx.L().Error().Err(err).Uint64("run_id", job.runID).Msg("更新执行状态失败")
+	} else {
+		s.publishStatus(job.runID, model.RunRunning, 1, false)
 	}
 
 	// 1) 编译：DB → 项目工作区。
@@ -516,7 +518,10 @@ func (s *RunService) persist(job *runJob, cc compiler.CompiledCase, res *parser.
 			"status":    model.RunError,
 			"error_msg": clip("结果落库失败："+err.Error(), 1024),
 		})
+		s.publishStatus(job.runID, model.RunError, 1, true)
+		return
 	}
+	s.publishStatus(job.runID, status, 1, true)
 }
 
 // finish 在"平台侧失败"（编译失败、工作区异常、引擎不可用等）时收尾。
@@ -545,6 +550,8 @@ func (s *RunService) finish(job *runJob, msg, status string, started time.Time) 
 	}
 	if err := s.patchRun(job.runID, updates); err != nil {
 		logx.L().Error().Err(err).Uint64("run_id", job.runID).Msg("更新执行终态失败")
+	} else {
+		s.publishStatus(job.runID, status, 0, true)
 	}
 }
 

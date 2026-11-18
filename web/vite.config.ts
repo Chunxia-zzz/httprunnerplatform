@@ -32,6 +32,8 @@ export default defineConfig({
       '/api': {
         target: apiTarget,
         changeOrigin: true,
+        // 执行进度走 WebSocket（F9）：不显式开启的话，开发模式下握手会被代理拦掉
+        ws: true,
       },
     },
   },

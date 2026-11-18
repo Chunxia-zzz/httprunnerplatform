@@ -34,6 +34,8 @@ type Deps struct {
 	// 刻意**不做 nil 兜底**：若忘了接线，静默换成一个空表只会让吊销"看起来成功了
 	// 但实际没吊销真实会话"，那比直接报错难查得多。见 UserService.revokeSessions。
 	Sessions *auth.Store
+	// Events 是执行进度广播（F9）。进程内，不落库。
+	Events *EventHub
 }
 
 // Set 汇总全部 service，供上层一次性注入与优雅关闭。
@@ -58,11 +60,18 @@ type Set struct {
 	Doc         *DocService
 	Share       *ShareService
 	Member      *MemberService
-	Audit       *AuditService
+	// Events 是执行进度广播（F9）
+	Events *EventHub
+	Audit  *AuditService
 }
 
 // New 构造全部 service。
 func New(d Deps) *Set {
+	// 事件中心是进程内单例：服务（发布）与 WS handler（订阅）必须拿到同一个实例，
+	// 因此在这里兜底创建，而不是让每个调用方各自 new 一个。
+	if d.Events == nil {
+		d.Events = NewEventHub()
+	}
 	caseSvc := &CaseService{Deps: d}
 	return &Set{
 		Project:     &ProjectService{Deps: d},
@@ -85,6 +94,7 @@ func New(d Deps) *Set {
 		Doc:         &DocService{Deps: d},
 		Share:       &ShareService{Deps: d},
 		Member:      &MemberService{Deps: d},
+		Events:      d.Events,
 		Audit:       &AuditService{Deps: d},
 	}
 }

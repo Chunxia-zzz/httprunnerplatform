@@ -333,6 +333,7 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 			CaseCode: b.CaseCode,
 			ErrorMsg: b.Reason,
 		})
+		s.publishCase(job.runID, b.CaseCode, "", status, seq, len(job.specs), 0)
 	}
 	for _, e := range compileErrors {
 		seq++
@@ -352,6 +353,7 @@ func (s *RunService) executeSuite(ctx context.Context, job *runSuiteJob, broken 
 		attempted = i + 1
 		o := s.runOneCase(ctx, job, ws, bin, p.cc, p.tc, seq)
 		outcomes = append(outcomes, o)
+		s.publishCase(job.runID, p.tc.Code, p.tc.Name, o.Status, seq, len(job.specs), o.DurationMs)
 
 		// 遇错即停：只在明确配了 abort 时才停。默认 continue，
 		// 这样 CI 里一次就能看到全部失败，不用"修一个跑一次"。
@@ -751,6 +753,8 @@ func (s *RunService) finishSuite(
 	updates["finished_at"] = &finished
 	if err := s.patchRun(job.runID, updates); err != nil {
 		logx.L().Error().Err(err).Uint64("run_id", job.runID).Msg("更新用例集执行终态失败")
+	} else {
+		s.publishStatus(job.runID, status, total, true)
 	}
 	logx.L().Info().
 		Uint64("run_id", job.runID).

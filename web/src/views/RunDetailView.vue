@@ -26,6 +26,7 @@ import {
 import ReportPanel from '@/components/ReportPanel.vue'
 import StepDetail from '@/components/StepDetail.vue'
 import { attrTagType, runStatusMeta, stepStatusMeta } from '@/utils/dict'
+import { connectRunEvents } from '@/utils/runSocket'
 import { formatDuration, formatTime } from '@/utils/format'
 import { notifyError, notifyOk } from '@/utils/error'
 
@@ -51,6 +52,11 @@ const run = computed(() => detail.value?.run ?? null)
 const terminal = computed(() => (run.value ? isTerminalRun(run.value.status) : true))
 
 let timer: number | undefined
+let socketClose: (() => void) | undefined
+let retryTimer: number | undefined
+let refreshTimer: number | undefined
+/** 实时/轮询模式，页面右上角如实展示 */
+const realtime = ref<'ws' | 'poll'>('poll')
 
 async function loadDetail(silent = false) {
   if (!silent) loading.value = true
@@ -58,14 +64,14 @@ async function loadDetail(silent = false) {
     detail.value = await runApi.getRun(runId.value)
     failed.value = ''
     if (terminal.value) {
-      stopPoll()
+      stopUpdates()
       await loadFinalArtifacts()
     } else {
-      startPoll()
+      startUpdates()
     }
   } catch (e) {
     failed.value = e instanceof Error ? e.message : '加载执行详情失败'
-    stopPoll()
+    stopUpdates()
   } finally {
     loading.value = false
   }
@@ -121,6 +127,68 @@ function stopPoll() {
   }
 }
 
+/** 事件到达后的合并刷新：多个事件挤在一起时只拉一次详情。 */
+function scheduleRefresh() {
+  if (refreshTimer !== undefined) return
+  refreshTimer = window.setTimeout(() => {
+    refreshTimer = undefined
+    void loadDetail(true)
+  }, 150)
+}
+
+/**
+ * 非终态时的刷新策略：优先 WebSocket（真实时），失败则降级为 1s 轮询，
+ * 并每 5s 尝试重新连回来。轮询只在"没有实时连接"时开，两者不会同时跑。
+ */
+function startUpdates() {
+  if (terminal.value) {
+    stopUpdates()
+    return
+  }
+  if (socketClose) return
+  socketClose = connectRunEvents(runId.value, {
+    onOpen: () => {
+      realtime.value = 'ws'
+      stopPoll()
+    },
+    onEvent: (ev) => {
+      if (ev.finished || (ev.status && isTerminalRun(ev.status))) {
+        void loadDetail(true)
+        return
+      }
+      scheduleRefresh()
+    },
+    onClose: () => {
+      socketClose = undefined
+      if (terminal.value) return
+      realtime.value = 'poll'
+      startPoll()
+      if (retryTimer === undefined) {
+        retryTimer = window.setTimeout(() => {
+          retryTimer = undefined
+          startUpdates()
+        }, 5000)
+      }
+    },
+  })
+}
+
+function stopUpdates() {
+  if (socketClose) {
+    socketClose()
+    socketClose = undefined
+  }
+  stopPoll()
+  if (retryTimer !== undefined) {
+    window.clearTimeout(retryTimer)
+    retryTimer = undefined
+  }
+  if (refreshTimer !== undefined) {
+    window.clearTimeout(refreshTimer)
+    refreshTimer = undefined
+  }
+}
+
 async function cancel() {
   try {
     await ElMessageBox.confirm(
@@ -167,7 +235,7 @@ watch(activeTab, (t) => {
 })
 
 watch(runId, () => {
-  stopPoll()
+  stopUpdates()
   stepsDetail.value = []
   logs.value = null
   declaredUrls.value = {}
@@ -175,7 +243,7 @@ watch(runId, () => {
 })
 
 onMounted(() => void loadDetail())
-onBeforeUnmount(stopPoll)
+onBeforeUnmount(stopUpdates)
 </script>
 
 <template>
