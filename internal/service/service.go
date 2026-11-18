@@ -61,10 +61,11 @@ type Set struct {
 	Share       *ShareService
 	Member      *MemberService
 	// Events 是执行进度广播（F9）
-	Events *EventHub
-	Audit  *AuditService
-	Perf   *PerfService
-	Health *HealthService
+	Events  *EventHub
+	Audit   *AuditService
+	Perf    *PerfService
+	Health  *HealthService
+	Failure *FailureClusterService
 }
 
 // New 构造全部 service。
@@ -100,6 +101,7 @@ func New(d Deps) *Set {
 		Audit:       &AuditService{Deps: d},
 		Perf:        &PerfService{Deps: d},
 		Health:      &HealthService{Deps: d},
+		Failure:     &FailureClusterService{Deps: d},
 	}
 }
 

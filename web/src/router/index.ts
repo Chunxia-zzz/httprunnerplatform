@@ -43,6 +43,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调试台' },
       },
       {
+        // 失败聚类：基于执行结果的诊断视图
+        path: 'failures',
+        name: 'failures',
+        component: () => import('@/views/FailuresView.vue'),
+        meta: { title: '失败聚类' },
+      },
+      {
         // 资产健康度：只读体检，放在性能回归之后
         path: 'health',
         name: 'health',

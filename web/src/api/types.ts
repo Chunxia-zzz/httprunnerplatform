@@ -151,6 +151,35 @@ export interface ProjectReq {
 /** 环境的变量表。值一律被后端转成字符串写入 .env。 */
 export type EnvMap = Record<string, unknown>
 
+/** 失败聚类（F13）。 */
+export interface FailureCaseItem {
+  case_id: ID
+  run_id: ID
+  case_code: string
+  name: string
+  status: string
+  detail: string
+  attribution: string
+}
+
+export interface FailureCluster {
+  key: string
+  title: string
+  attribution: string
+  hint: string
+  count: number
+  cases: FailureCaseItem[]
+  truncated: boolean
+}
+
+export interface FailureClusterResult {
+  project_id: ID
+  scope: { run_id: number; days: number }
+  generated_at: string
+  total_failed_cases: number
+  clusters: FailureCluster[]
+}
+
 /** 资产健康度（F12）。 */
 export interface HealthItem {
   entity_type: 'case' | 'api' | string
