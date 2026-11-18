@@ -15,6 +15,7 @@ export * as userApi from './user'
 export * as paramApi from './param'
 export * as statsApi from './stats'
 export * as importApi from './import'
+export * as openapiApi from './openapi'
 export * as baselineApi from './baseline'
 
 // ---------------------------------------------------------------------------

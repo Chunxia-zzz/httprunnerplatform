@@ -301,6 +301,11 @@ func registerImportRoutes(g *gin.RouterGroup, deps *Deps) {
 	h := newImportHandler(deps)
 	g.POST("/projects/:id/import/preview", h.Preview)
 	g.POST("/projects/:id/import/commit", h.Commit)
+
+	// OpenAPI / Swagger → 接口定义（F5）：同样是「预览 → 提交」两段式。
+	oh := newOpenAPIHandler(deps)
+	g.POST("/projects/:id/import/openapi/preview", oh.Preview)
+	g.POST("/projects/:id/import/openapi/commit", oh.Commit)
 }
 
 // registerExportRoutes 注册导出路由（M4）。

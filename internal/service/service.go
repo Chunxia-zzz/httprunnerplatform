@@ -54,6 +54,7 @@ type Set struct {
 	Baseline    *BaselineService
 	API         *APIService
 	Mock        *MockService
+	OpenAPI     *OpenAPIService
 }
 
 // New 构造全部 service。
@@ -76,6 +77,7 @@ func New(d Deps) *Set {
 		Baseline:    NewBaselineService(d),
 		API:         &APIService{Deps: d},
 		Mock:        &MockService{Deps: d, hits: map[uint64][]MockHit{}},
+		OpenAPI:     &OpenAPIService{Deps: d},
 	}
 }
 

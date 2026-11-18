@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Chunxia-zzz/httprunnerplatform/internal/model"
+	"github.com/Chunxia-zzz/httprunnerplatform/pkg/jsonx"
 )
 
 // MockService 提供按接口定义自动生成的 Mock 响应（F4）。
@@ -265,34 +266,49 @@ func isMockPlaceholder(seg string) bool {
 // ---------------------------------------------------------------------------
 
 // hasMockBody 表示接口定义里是否有可回放的响应体。
+//
+// F5 起优先看 response_body（从 OpenAPI 导入的响应示例），
+// 为空时回退 body —— 保持 F1 手工建接口的既有行为不变。
 func hasMockBody(a *model.APIDef) bool {
-	if a.Body.Val == nil {
+	if hasBodyValue(a.ResponseBody, a.ResponseType) {
+		return true
+	}
+	return hasBodyValue(a.Body, a.BodyType)
+}
+
+func hasBodyValue(body jsonx.Any, bodyType string) bool {
+	if body.Val == nil {
 		return false
 	}
-	switch strings.ToLower(a.BodyType) {
-	case model.BodyTypeNone:
+	switch strings.ToLower(bodyType) {
+	case model.BodyTypeNone, "":
 		return false
 	case model.BodyTypeRaw:
-		s, ok := a.Body.Val.(string)
+		s, ok := body.Val.(string)
 		return ok && s != ""
 	}
 	return true
 }
 
-// mockBody 把接口定义的 body 渲染成响应体与 Content-Type。
+// mockBody 把接口定义渲染成响应体与 Content-Type。
 //
+// 优先级：response_body（导入的响应示例）→ body（F1 的请求体，兼作示例）。
 // form 也按 JSON 返回：平台里的 form 是「字段对」，联调方拿到 JSON 更可用；
 // 返回内容永远来自用户自己写的接口定义，不虚构字段。
 func mockBody(a *model.APIDef) ([]byte, string) {
-	if !hasMockBody(a) {
+	body, bodyType := a.ResponseBody, a.ResponseType
+	if !hasBodyValue(body, bodyType) {
+		body, bodyType = a.Body, a.BodyType
+	}
+	if !hasBodyValue(body, bodyType) {
 		return nil, "application/json; charset=utf-8"
 	}
-	if strings.ToLower(a.BodyType) == model.BodyTypeRaw {
-		if s, ok := a.Body.Val.(string); ok {
+	if strings.ToLower(bodyType) == model.BodyTypeRaw {
+		if s, ok := body.Val.(string); ok {
 			return []byte(s), "text/plain; charset=utf-8"
 		}
 	}
-	b, err := json.Marshal(a.Body.Val)
+	b, err := json.Marshal(body.Val)
 	if err != nil {
 		return nil, "application/json; charset=utf-8"
 	}

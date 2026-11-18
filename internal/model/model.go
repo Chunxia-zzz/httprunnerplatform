@@ -389,10 +389,18 @@ type Environment struct {
 // APIDef 是接口定义库中的接口（M2 启用，M1 建表）。
 // APIDef 的来源（M2 裁剪说明：导入器按来源打标，便于回看从哪来）。
 const (
-	APISourceManual = "manual"
-	APISourceHAR    = "har"
-	APISourceCurl   = "curl"
-	APISourceImport = "postman"
+	APISourceManual  = "manual"
+	APISourceHAR     = "har"
+	APISourceCurl    = "curl"
+	APISourceImport  = "postman"
+	APISourceOpenAPI = "openapi"
+)
+
+// 接口定义的响应示例类型（F4/F5）。
+const (
+	ResponseTypeNone = "none"
+	ResponseTypeJSON = "json"
+	ResponseTypeRaw  = "raw"
 )
 
 // HTTPMethods 是接口定义支持的请求方法（与前端 utils/dict.ts 的 HTTP_METHODS 对齐）。
@@ -405,17 +413,26 @@ type APIDef struct {
 	// 与 TestCase.Module 的既有惯例一致：字符串分组，不单独建服务表——
 	// 30 人团队的服务数在 10 个量级，GROUP BY 足够，且避免为「服务」
 	// 引入独立 CRUD 生命周期。空串表示「未分类」。
-	Module      string    `gorm:"size:64;not null;default:''" json:"module"`
-	Code        string    `gorm:"size:64;not null" json:"code"`
-	Name        string    `gorm:"size:128;not null" json:"name"`
-	Method      string    `gorm:"size:16;not null;default:'GET'" json:"method"`
-	Path        string    `gorm:"size:512;not null;default:''" json:"path"`
-	Headers     jsonx.Map `gorm:"type:text" json:"headers"`
-	Params      jsonx.Map `gorm:"type:text" json:"params"`
-	Body        jsonx.Any `gorm:"type:text" json:"body"`
-	BodyType    string    `gorm:"size:16;not null;default:'json'" json:"body_type"`
-	Description string    `gorm:"size:512;not null;default:''" json:"description"`
-	Source      string    `gorm:"size:16;not null;default:'manual'" json:"source"`
+	Module  string    `gorm:"size:64;not null;default:''" json:"module"`
+	Code    string    `gorm:"size:64;not null" json:"code"`
+	Name    string    `gorm:"size:128;not null" json:"name"`
+	Method  string    `gorm:"size:16;not null;default:'GET'" json:"method"`
+	Path    string    `gorm:"size:512;not null;default:''" json:"path"`
+	Headers jsonx.Map `gorm:"type:text" json:"headers"`
+	Params  jsonx.Map `gorm:"type:text" json:"params"`
+	// Body 是**请求体**：引用它的用例编译时内联进 request（F1）。
+	Body     jsonx.Any `gorm:"type:text" json:"body"`
+	BodyType string    `gorm:"size:16;not null;default:'json'" json:"body_type"`
+	// ResponseBody 是**响应示例**：Mock 返回它（F4/F5）。
+	//
+	// ⭐ 与 Body 必须分开：同一个字段既当请求体又当响应体，会互相污染
+	// （改请求体等于改 mock 返回，反之亦然）。为空时 Mock 回退到 Body，
+	// 保持 F1 手工建接口的既有行为。
+	ResponseBody jsonx.Any `gorm:"type:text" json:"response_body"`
+	// ResponseType 只有 json / raw / none 三种（json 序列化、raw 原文）。
+	ResponseType string `gorm:"size:16;not null;default:'none'" json:"response_type"`
+	Description  string `gorm:"size:512;not null;default:''" json:"description"`
+	Source       string `gorm:"size:16;not null;default:'manual'" json:"source"`
 }
 
 // TestCase 是用例。

@@ -23,16 +23,18 @@ type APIService struct {
 
 // APIReq 是创建/更新接口定义的请求（PUT 为全量覆盖）。
 type APIReq struct {
-	Code        string    `json:"code"`
-	Name        string    `json:"name"`
-	Module      string    `json:"module"`
-	Method      string    `json:"method"`
-	Path        string    `json:"path"`
-	Headers     jsonx.Map `json:"headers"`
-	Params      jsonx.Map `json:"params"`
-	Body        jsonx.Any `json:"body"`
-	BodyType    string    `json:"body_type"`
-	Description string    `json:"description"`
+	Code         string    `json:"code"`
+	Name         string    `json:"name"`
+	Module       string    `json:"module"`
+	Method       string    `json:"method"`
+	Path         string    `json:"path"`
+	Headers      jsonx.Map `json:"headers"`
+	Params       jsonx.Map `json:"params"`
+	Body         jsonx.Any `json:"body"`
+	BodyType     string    `json:"body_type"`
+	ResponseBody jsonx.Any `json:"response_body"`
+	ResponseType string    `json:"response_type"`
+	Description  string    `json:"description"`
 }
 
 // APIView 是接口定义的展示视图：实体 + 派生字段。
@@ -137,18 +139,20 @@ func (s *APIService) Create(projectID uint64, req APIReq) (*APIView, error) {
 	}
 
 	a := &model.APIDef{
-		ProjectID:   projectID,
-		Module:      req.Module,
-		Code:        req.Code,
-		Name:        req.Name,
-		Method:      req.Method,
-		Path:        req.Path,
-		Headers:     req.Headers,
-		Params:      req.Params,
-		Body:        req.Body,
-		BodyType:    req.BodyType,
-		Description: req.Description,
-		Source:      model.APISourceManual,
+		ProjectID:    projectID,
+		Module:       req.Module,
+		Code:         req.Code,
+		Name:         req.Name,
+		Method:       req.Method,
+		Path:         req.Path,
+		Headers:      req.Headers,
+		Params:       req.Params,
+		Body:         req.Body,
+		BodyType:     req.BodyType,
+		ResponseBody: req.ResponseBody,
+		ResponseType: req.ResponseType,
+		Description:  req.Description,
+		Source:       model.APISourceManual,
 	}
 	if err := s.DB.Create(a).Error; err != nil {
 		return nil, errInternal("创建接口定义失败", err)
@@ -190,6 +194,8 @@ func (s *APIService) Update(id uint64, req APIReq) (*APIView, error) {
 	a.Params = req.Params
 	a.Body = req.Body
 	a.BodyType = req.BodyType
+	a.ResponseBody = req.ResponseBody
+	a.ResponseType = req.ResponseType
 	a.Description = req.Description
 	if err := s.DB.Save(a).Error; err != nil {
 		return nil, errInternal("更新接口定义失败", err)
@@ -264,6 +270,15 @@ func normalizeAPIReq(req APIReq) (APIReq, error) {
 	req.Method = strings.ToUpper(strings.TrimSpace(req.Method))
 	req.Path = strings.TrimSpace(req.Path)
 	req.BodyType = strings.ToLower(strings.TrimSpace(req.BodyType))
+	req.ResponseType = strings.ToLower(strings.TrimSpace(req.ResponseType))
+	if req.ResponseType == "" {
+		req.ResponseType = model.ResponseTypeNone
+	}
+	switch req.ResponseType {
+	case model.ResponseTypeNone, model.ResponseTypeJSON, model.ResponseTypeRaw:
+	default:
+		return req, errBadParam("响应示例类型只支持 json / raw / none，收到 %q", req.ResponseType)
+	}
 
 	if req.Code == "" {
 		return req, errBadParam("接口标识不能为空")

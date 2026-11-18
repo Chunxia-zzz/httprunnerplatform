@@ -248,6 +248,9 @@ export interface APIDef {
   params: EnvMap | null
   body: unknown
   body_type: BodyType | string
+  /** 响应示例（Mock 用；F5 起与请求体分离） */
+  response_body?: unknown
+  response_type?: string
   description: string
   source: string
   /** 派生：被多少个用例步骤引用（后端 GROUP BY 算出，不落库） */
@@ -274,6 +277,8 @@ export interface APIReq {
   params?: EnvMap | null
   body?: unknown
   body_type?: string
+  response_body?: unknown
+  response_type?: string
   description?: string
 }
 
@@ -880,6 +885,40 @@ export interface DebugRequestReq {
   }
   /** 同步阻塞上限（秒），0 = 平台默认 30s */
   timeout_sec?: number
+}
+
+/** OpenAPI 导入（F5）的一条候选接口。 */
+export interface ImportedAPI {
+  code: string
+  name: string
+  module: string
+  method: string
+  path: string
+  headers?: EnvMap | null
+  params?: EnvMap | null
+  body?: unknown
+  body_type: string
+  response_body?: unknown
+  response_type: string
+  description?: string
+  /** 同标识接口已存在 */
+  conflict: boolean
+}
+
+/** OpenAPI 预览结果。 */
+export interface OpenAPIPreview {
+  detected: string
+  servers: string[]
+  apis: ImportedAPI[]
+  warnings: string[]
+}
+
+/** 提交结果：逐条报告。 */
+export interface OpenAPICommitResult {
+  created: number
+  skipped: number
+  overwritten: number
+  failed: { code: string; reason: string }[]
 }
 
 /** Mock 服务（F4）：可被 mock 的接口摘要。 */
