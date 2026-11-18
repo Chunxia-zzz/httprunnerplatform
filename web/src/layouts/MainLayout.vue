@@ -32,6 +32,7 @@ const ALL_NAV = [
   { name: 'plans', label: '测试计划', icon: 'Timer', admin: false },
   { name: 'runs', label: '执行记录', icon: 'VideoPlay', admin: false },
   { name: 'perf', label: '性能回归', icon: 'TrendCharts', admin: false },
+  { name: 'health', label: '资产健康度', icon: 'FirstAidKit', admin: false },
   { name: 'changes', label: '变更历史', icon: 'Tickets', admin: false },
   { name: 'stats', label: '统计看板', icon: 'DataAnalysis', admin: false },
   { name: 'tokens', label: 'CI 令牌', icon: 'Key', admin: false },

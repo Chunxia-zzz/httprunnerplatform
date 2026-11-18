@@ -151,6 +151,34 @@ export interface ProjectReq {
 /** 环境的变量表。值一律被后端转成字符串写入 .env。 */
 export type EnvMap = Record<string, unknown>
 
+/** 资产健康度（F12）。 */
+export interface HealthItem {
+  entity_type: 'case' | 'api' | string
+  entity_id: ID
+  key: string
+  name: string
+  detail: string
+}
+
+export interface HealthCategory {
+  key: string
+  label: string
+  severity: 'high' | 'medium' | 'low' | string
+  hint: string
+  count: number
+  items: HealthItem[]
+}
+
+export interface HealthReport {
+  project_id: ID
+  score: number
+  generated_at: string
+  applied: { days: number }
+  deductions: { key: string; label: string; count: number; penalty: number; severity: string }[]
+  categories: HealthCategory[]
+  summary: Record<string, number>
+}
+
 /** 性能趋势点（F11）。 */
 export interface PerfPoint {
   run_id: ID

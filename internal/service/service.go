@@ -64,6 +64,7 @@ type Set struct {
 	Events *EventHub
 	Audit  *AuditService
 	Perf   *PerfService
+	Health *HealthService
 }
 
 // New 构造全部 service。
@@ -98,6 +99,7 @@ func New(d Deps) *Set {
 		Events:      d.Events,
 		Audit:       &AuditService{Deps: d},
 		Perf:        &PerfService{Deps: d},
+		Health:      &HealthService{Deps: d},
 	}
 }
 

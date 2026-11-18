@@ -43,6 +43,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调试台' },
       },
       {
+        // 资产健康度：只读体检，放在性能回归之后
+        path: 'health',
+        name: 'health',
+        component: () => import('@/views/HealthView.vue'),
+        meta: { title: '资产健康度' },
+      },
+      {
         // 性能回归：基于执行数据聚合，放在执行记录之后
         path: 'perf',
         name: 'perf',

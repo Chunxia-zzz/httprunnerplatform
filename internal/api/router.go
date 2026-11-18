@@ -96,6 +96,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 		registerChangeRoutes(authed, deps)
 		registerWSRoutes(authed, deps)
 		registerPerfRoutes(authed, deps)
+		registerHealthRoutes(authed, deps)
 	}
 
 	// ⭐ CI 入口单独一个前缀：不走会话体系，语义与限流都和页面上的人不同，
@@ -126,6 +127,12 @@ func registerMemberRoutes(g *gin.RouterGroup, deps *Deps) {
 	admins := g.Group("/projects/:id/members", middleware.RequireAdmin())
 	admins.POST("", h.Add)
 	admins.DELETE("/:userId", h.Remove)
+}
+
+// registerHealthRoutes 注册资产健康度（F12）。
+func registerHealthRoutes(g *gin.RouterGroup, deps *Deps) {
+	h := newHealthHandler(deps)
+	g.GET("/projects/:id/health", h.Get)
 }
 
 // registerPerfRoutes 注册性能回归分析（F11）。

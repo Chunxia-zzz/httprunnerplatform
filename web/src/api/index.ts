@@ -20,6 +20,7 @@ export * as docsApi from './docs'
 export * as memberApi from './members'
 export * as changeApi from './changes'
 export * as perfApi from './perf'
+export * as healthApi from './health'
 export * as baselineApi from './baseline'
 
 // ---------------------------------------------------------------------------
